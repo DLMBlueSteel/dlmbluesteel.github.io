@@ -19,14 +19,14 @@
       bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
-      width: calc(100% - 280px - 40px);
+      width: calc(100% - 340px - 40px);
       max-width: 1200px;
       height: 90px;
       border-radius: 16px;
-      background: rgba(20, 20, 25, 0.65);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: linear-gradient(135deg, rgba(35, 37, 50, 0.82), rgba(13, 14, 23, 0.9));
+      backdrop-filter: blur(28px) saturate(145%);
+      -webkit-backdrop-filter: blur(28px) saturate(145%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       z-index: 1000;
       display: flex;
       align-items: center;
@@ -126,9 +126,9 @@
     .horizontal-scroll::-webkit-scrollbar { height: 6px; }
     .horizontal-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
     .recent-card {
-      width: 180px; flex-shrink: 0; background: rgba(255,255,255,0.04); border-radius: 14px; padding: 14px; transition: 0.2s; cursor: pointer;
+      width: 180px; flex-shrink: 0; background: linear-gradient(135deg, rgba(35, 37, 50, 0.78), rgba(13, 14, 23, 0.88)); border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(28px) saturate(145%); border-radius: 14px; padding: 14px; transition: 0.2s; cursor: pointer;
     }
-    .recent-card:hover { background: rgba(255,255,255,0.09); transform: translateY(-2px); }
+    .recent-card:hover { background: linear-gradient(135deg, rgba(48, 51, 67, 0.86), rgba(18, 20, 31, 0.93)); transform: translateY(-2px); }
     .recent-art { position: relative; width: 100%; aspect-ratio: 1; border-radius: 10px; overflow: hidden; margin-bottom: 10px; background: rgba(255,255,255,0.05); }
     .recent-art img { width: 100%; height: 100%; object-fit: cover; }
     .recent-play-hover {
@@ -143,8 +143,8 @@
     .empty-state-small { font-size: 14px; color: rgba(255,255,255,0.4); font-style: italic; padding: 10px 0; }
     
     .queue-list-small { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
-    .queue-item-small { display: flex; align-items: center; gap: 14px; padding: 10px 14px; background: rgba(255,255,255,0.04); border-radius: 10px; transition: background 0.2s; }
-    .queue-item-small:hover { background: rgba(255,255,255,0.09); }
+    .queue-item-small { display: flex; align-items: center; gap: 14px; padding: 10px 14px; background: linear-gradient(135deg, rgba(35, 37, 50, 0.78), rgba(13, 14, 23, 0.88)); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(24px) saturate(140%); border-radius: 10px; transition: background 0.2s; }
+    .queue-item-small:hover { background: linear-gradient(135deg, rgba(48, 51, 67, 0.86), rgba(18, 20, 31, 0.93)); }
     .queue-thumb-small { width: 52px; height: 52px; border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.07); flex-shrink: 0; }
     .queue-thumb-small img { width: 100%; height: 100%; object-fit: cover; }
     .queue-thumb-small svg { width: 24px; height: 24px; color: rgba(255,255,255,0.3); margin: auto; display: block; margin-top: 14px; }
@@ -154,6 +154,62 @@
     .queue-remove-small { background: none; border: none; color: rgba(255,255,255,0.3); cursor: pointer; padding: 6px; border-radius: 6px; transition: 0.15s; flex-shrink: 0; }
     .queue-remove-small:hover { color: #ff5c5c; background: rgba(255,92,92,0.12); }
     .queue-remove-small svg { width: 15px; height: 15px; }
+    .queue-item[draggable="true"] { cursor: grab; }
+    .queue-item.dragging { opacity: 0.45; background: rgba(123,108,246,0.2); transform: scale(0.98); }
+    .queue-item.drag-over { outline: 2px dashed #7b6cf6; background: rgba(123,108,246,0.15); border-radius: 10px; }
+    .queue-drag-handle { color: rgba(255,255,255,0.35); padding: 6px; cursor: grab; }
+    /* Glass frames - same as bottom player bar */
+    .section-frame { 
+      background: linear-gradient(135deg, rgba(35, 37, 50, 0.82), rgba(13, 14, 23, 0.9));
+      backdrop-filter: blur(28px) saturate(145%);
+      -webkit-backdrop-filter: blur(28px) saturate(145%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 14px; 
+      padding: 12px; 
+      margin: 8px 0;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .horizontal-scroll { 
+      background: linear-gradient(135deg, rgba(35, 37, 50, 0.82), rgba(13, 14, 23, 0.9)) !important;
+      backdrop-filter: blur(28px) saturate(145%) !important;
+      -webkit-backdrop-filter: blur(28px) saturate(145%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      border-radius: 14px; 
+      padding: 12px !important;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
+    }
+    #queueList { 
+      background: linear-gradient(135deg, rgba(35, 37, 50, 0.82), rgba(13, 14, 23, 0.9));
+      backdrop-filter: blur(28px) saturate(145%);
+      -webkit-backdrop-filter: blur(28px) saturate(145%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 14px; 
+      padding: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .queue-list-small { 
+      background: linear-gradient(135deg, rgba(35, 37, 50, 0.82), rgba(13, 14, 23, 0.9));
+      backdrop-filter: blur(28px) saturate(145%);
+      -webkit-backdrop-filter: blur(28px) saturate(145%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px; 
+      padding: 10px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .bb-title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .bb-title-row .bb-title { flex: 1; }
+    .favorite-btn { width: 28px; height: 28px; padding: 2px; flex-shrink: 0; }
+    .favorite-btn.active { color: #fff; }
+    .favorite-btn.active svg { fill: #fff; stroke: #fff; }
+    .accent-picker { display:flex; gap:16px; align-items:center; }
+    .accent-picker label { display:flex; align-items:center; gap:8px; font-size:13px; color:rgba(255,255,255,.7); }
+    .accent-picker input { width:42px; height:30px; border:0; background:transparent; cursor:pointer; }
+    .accent-preview { height:42px; border-radius:10px; border:1px solid rgba(255,255,255,.1); margin:10px 0; }
+    .effects-wrap { position: relative; }
+    .effects-panel { position: absolute; right: 0; bottom: 42px; width: 210px; padding: 14px; border-radius: 12px; background: rgba(18,18,25,.98); border: 1px solid rgba(255,255,255,.12); box-shadow: 0 12px 30px rgba(0,0,0,.45); display: none; }
+    .effects-panel.open { display: flex; flex-direction: column; gap: 12px; }
+    .effects-row { display: grid; grid-template-columns: 42px 1fr 36px; align-items: center; gap: 8px; font-size: 12px; color: rgba(255,255,255,.75); }
+    .effects-row input { width: 100%; accent-color: #7b6cf6; }
     .quick-queue-viewall { margin-top: 12px; font-size: 12px; color: rgba(255,255,255,0.4); text-align: right; cursor: pointer; }
     .quick-queue-viewall:hover { color: rgba(255,255,255,0.8); }
     /* Time-ago badge on recently played cards */
@@ -205,7 +261,7 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">
         <div class="brand-logo">
-          <img src="assets/logo.png" alt="BlueSteel Logo" id="brandLogoImg" />
+          <img src="assets/dlm-logo.png" alt="DLM BlueSteel Player logo" id="brandLogoImg" />
         </div>
         <div class="brand-text">
           <span class="brand-name">DLM BlueSteel</span>
@@ -224,6 +280,14 @@
         <button class="nav-item" id="nav-search" data-view="search" title="Add Songs">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <span>Add Songs</span>
+        </button>
+        <button class="nav-item" id="nav-favorites" data-view="favorites" title="Favorites">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          <span>Favorites</span>
+        </button>
+        <button class="nav-item" id="nav-user-settings" data-view="user-settings" title="User Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+          <span>User Settings</span>
         </button>
         <button class="nav-item" id="nav-settings" data-view="settings" title="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
@@ -344,7 +408,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <h2>Recently played</h2>
             </div>
-            <div class="dashboard-section" style="padding-top:0;">
+            <div class="section-frame">
               <div class="horizontal-scroll" id="recentlyPlayedContainer">
                 <div class="empty-state-small">No recent history — songs appear here for 7 days</div>
               </div>
@@ -358,7 +422,7 @@
                 Add song
               </button>
             </div>
-            <div class="dashboard-section" style="padding-top:0;">
+            <div class="section-frame">
               <!-- Inline add input (hidden by default) -->
               <form id="quickPlayFormNew" class="quick-add-form-small" style="display:none; max-width: 450px; margin-bottom:12px;">
                 <div class="search-box" style="margin-bottom:0; background: rgba(255,255,255,0.05);">
@@ -402,6 +466,11 @@
             </div>
           </div>
         </section>
+        <!-- Favorites view -->
+        <section class="view" id="view-favorites">
+          <div class="queue-header"><div><h2 class="section-title">Favorites</h2><p class="section-sub">Saved songs are stored in this browser.</p></div></div>
+          <div class="dashboard-section" style="padding-top:0;"><div class="horizontal-scroll" id="favoritesContainer"><div class="empty-state-small">Use the heart in the player bar to save a favorite</div></div></div>
+        </section>
         <!-- ══ Add Songs VIEW ══ -->
         <section class="view" id="view-search">
           <div class="search-hero">
@@ -436,9 +505,34 @@
           </div>
         </section>
         <!-- ══ SETTINGS VIEW ══ -->
+        <section class="view" id="view-user-settings">
+          <h2 class="section-title">User Settings</h2>
+          <div class="settings-grid">
+            <div class="glass-card settings-card"><h3>Language</h3><p class="settings-desc">British English is the default for this browser.</p><div class="settings-row"><select id="localeSelect" class="settings-input"><option value="british">British English</option><option value="american">American English</option></select></div></div>
+            <div class="glass-card settings-card"><h3>Local Background</h3><p class="settings-desc">This image is stored only in this browser.</p><div class="settings-actions"><button id="backgroundBtn" class="ghost-btn">Choose Background</button><button id="clearBackgroundBtn" class="ghost-btn danger-btn">Reset to Default Background</button></div><input id="backgroundInput" type="file" accept="image/*" hidden /></div>
+            <div class="glass-card settings-card"><h3>Accent Gradient</h3><p class="settings-desc">Choose any two colours for your local gradient.</p><div class="accent-picker"><label>Start <input id="accentStart" type="color" value="#6366f1"></label><label>End <input id="accentEnd" type="color" value="#8b5cf6"></label></div><div id="accentPreview" class="accent-preview"></div><button id="resetAccentBtn" class="ghost-btn">Reset to Default Accent</button></div>
+          </div>
+        </section>
         <section class="view" id="view-settings">
           <h2 class="section-title">Settings</h2>
           <div class="settings-grid">
+            <div class="glass-card settings-card">
+              <div class="settings-icon accent-2">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4Z"/></svg>
+              </div>
+              <h3>Announcements</h3>
+              <p class="settings-desc">Send an announcement to the selected server. Choose a preset or write your own message.</p>
+              <div class="settings-row"><select id="announcementPreset" class="settings-input"><option value="">Choose a preset…</option><option value="Music is back online — request your next track!">Music online</option><option value="The music player will undergo maintenance shortly.">Maintenance soon</option><option value="Please keep song requests appropriate for this server.">Request reminder</option></select></div>
+              <div class="settings-row"><input id="announcementInput" type="text" maxlength="1800" class="settings-input" placeholder="Announcement message…" /></div>
+              <div class="settings-actions"><button class="gradient-btn" id="sendAnnouncementBtn">Send announcement</button></div>
+            </div>
+            <div class="glass-card settings-card">
+              <div class="settings-icon accent-4"></div>
+              <h3>Maintenance mode</h3>
+              <p class="settings-desc">Stops all music, clears queues, notifies servers, and disconnects the bot until switched off.</p>
+              <div class="settings-actions"><button class="ghost-btn danger-btn" id="maintenanceBtn">Enable maintenance</button></div>
+              <div class="test-result" id="maintenanceStatus"></div>
+            </div>
             <div class="glass-card settings-card">
               <div class="settings-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
@@ -509,7 +603,7 @@
           <img src="" id="bbArtImg" alt="" style="display:none;" />
         </div>
         <div class="bb-text">
-          <div class="bb-title" id="bbTitle">Nothing Playing</div>
+          <div class="bb-title-row"><div class="bb-title" id="bbTitle">Nothing Playing</div><button class="bb-btn favorite-btn" id="bbFavoriteBtn" title="Add current song to favorites" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div>
           <div class="bb-artist" id="bbArtist">Queue is empty</div>
         </div>
       </div>
@@ -535,6 +629,13 @@
       </div>
       <!-- Right: Filters + Volume -->
       <div class="bb-filters">
+        <div class="effects-wrap">
+          <button class="bb-btn" id="effectsBtn" title="Speed and pitch effects">Effects</button>
+          <div class="effects-panel" id="effectsPanel">
+            <div class="effects-row"><span>Speed</span><input id="bbSpeedSlider" type="range" min="0.5" max="2" value="1" step="0.05"><span id="bbSpeedVal">1.00x</span></div>
+            <div class="effects-row"><span>Pitch</span><input id="bbPitchSlider" type="range" min="0.5" max="2" value="1" step="0.05"><span id="bbPitchVal">1.00x</span></div>
+          </div>
+        </div>
         <div class="volume-control">
           <button class="vol-btn" id="bbVolBtn" title="Mute / Unmute">
             <!-- Speaker icon (unmuted) -->
@@ -554,7 +655,7 @@
       <!-- Normal PIN state -->
       <div id="pinState">
         <div class="pin-logo">
-          <img src="assets/logo.png" alt="Logo" />
+          <img src="assets/dlm-logo.png" alt="DLM BlueSteel Logo" />
         </div>
         <h2 class="pin-title">Settings Locked</h2>
         <p class="pin-sub" id="pinSub">Enter your PIN to access Settings</p>
@@ -611,6 +712,6 @@
   </div>
   <!-- Toast Notifications -->
   <div class="toast-container" id="toastContainer"></div>
-  <script src="app_live.js" defer></script>
+  <script src="app.js" defer></script>
 </body>
 </html>
