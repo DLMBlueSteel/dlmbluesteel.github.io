@@ -617,7 +617,6 @@ let pinBuf          = '';      // current digits entered
 let pinAttempts     = 0;       // wrong attempts
 let pinKeytimes     = [];      // timestamps for robot detection
 let pinMode         = 'pin';   // 'pin' | 'mgmt' | 'puzzle'
-
 function openPinOverlay() {
   pinBuf = ''; pinKeytimes = [];
   pinMode = 'mgmt' === pinMode ? 'mgmt' : 'pin'; // preserve if already mgmt
@@ -626,36 +625,19 @@ function openPinOverlay() {
   updateDots();
   $('pinAttempts').textContent = '';
   $('pinOverlay').style.display = 'flex';
-  
-  // Injected: Force hide bottom bar
-  const bb = document.querySelector('.bottom-player-bar');
-  if (bb) bb.style.display = 'none';
 }
-
 function closePinOverlay() {
   $('pinOverlay').style.display = 'none';
   pinBuf = ''; pinKeytimes = [];
-  
-  // Injected: Restore bottom bar only if in player view and not classic
-  const bb = document.querySelector('.bottom-player-bar');
-  const isClassic = document.body.classList.contains('classic-ui');
-  const activeNav = document.querySelector('.nav-item.active');
-  const currentView = activeNav ? activeNav.dataset.view : 'player';
-
-  if (bb && currentView === 'player' && !isClassic) {
-    bb.style.display = 'flex';
-  }
 }
-
 function showPinState(mode) {
   pinMode = mode;
-  $('pinState').style.display    = mode === 'pin'    ? 'flex' : 'none';
+  $('pinState').style.display   = mode === 'pin'    ? 'flex' : 'none';
   $('mgmtState').style.display  = mode === 'mgmt'   ? 'flex' : 'none';
   $('puzzleState').style.display= mode === 'puzzle' ? 'flex' : 'none';
   if (mode === 'mgmt')   { $('mgmtInput').value = '';   $('mgmtError').textContent = '';   setTimeout(() => $('mgmtInput').focus(),   80); }
   if (mode === 'puzzle') { $('puzzleInput').value = ''; $('puzzleError').textContent = ''; setTimeout(() => $('puzzleInput').focus(), 80); }
 }
-
 function shakePinBox() {
   const box = $('pinBox');
   box.classList.remove('shake');
@@ -663,7 +645,6 @@ function shakePinBox() {
   box.classList.add('shake');
   setTimeout(() => box.classList.remove('shake'), 500);
 }
-
 function updateDots() {
   for (let i = 0; i < 4; i++) {
     const dot = $(`d${i}`);
@@ -673,7 +654,6 @@ function updateDots() {
     }
   }
 }
-
 function flashErrorDots() {
   for (let i = 0; i < 4; i++) {
     const dot = $(`d${i}`);
@@ -684,7 +664,6 @@ function flashErrorDots() {
   }
   setTimeout(updateDots, 700);
 }
-
 function isRoboticInput() {
   if (pinKeytimes.length < 2) return false;
   for (let i = 1; i < pinKeytimes.length; i++) {
@@ -692,7 +671,6 @@ function isRoboticInput() {
   }
   return false;
 }
-
 function pressDigit(d) {
   if (pinBuf.length >= 4) return;
   const now = Date.now();
@@ -709,7 +687,6 @@ function pressDigit(d) {
     setTimeout(checkPin, 120);
   }
 }
-
 function checkPin() {
   if (pinBuf === PIN_CORRECT) {
     // Correct!
@@ -740,7 +717,8 @@ function checkPin() {
       setTimeout(updateDots, 700);
     }
   }
-}// Navigation
+}
+// Navigation
 function setView(name) {
   document.querySelectorAll('.view').forEach(v => {
     v.classList.remove('active');
