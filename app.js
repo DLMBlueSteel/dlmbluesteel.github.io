@@ -47,7 +47,7 @@ async function sendVolumeChange(vol) {
   if (!selectedGuildId) return;
   try {
     await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/volume?guildId=${selectedGuildId}&val=${vol}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
-  } catch (err) { console.error(err); }
+  } catch (err) { console.error(err); showToast("API Error: " + err.message, "error"); }
 }
 // ─── DOM ────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -1025,7 +1025,32 @@ document.addEventListener('DOMContentLoaded', () => {
     applyLocale(localStorage.getItem('dlm_locale') || 'british');
     localeSelect.addEventListener('change', () => applyLocale(localeSelect.value));
   }
-  // Background images remain entirely in the current browser's local storage.
+  // Background images stored via IndexedDB to bypass the 5MB browser quota for large files
+  const initDB = () => new Promise((resolve, reject) => {
+    const req = indexedDB.open('dlm_db', 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore('dlm_store');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  const saveBg = (data) => initDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('dlm_store', 'readwrite');
+    tx.objectStore('dlm_store').put(data, 'bg');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject();
+  }));
+  const loadBg = () => initDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('dlm_store', 'readonly');
+    const req = tx.objectStore('dlm_store').get('bg');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject();
+  }));
+  const clearBg = () => initDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('dlm_store', 'readwrite');
+    tx.objectStore('dlm_store').delete('bg');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject();
+  }));
+
   const backgroundBtn = $('backgroundBtn'), backgroundInput = $('backgroundInput'), scene = document.querySelector('.bg-scene');
   function applyLocalBackground(image) {
     if (!scene) return;
@@ -1033,7 +1058,11 @@ document.addEventListener('DOMContentLoaded', () => {
     scene.style.backgroundSize = image ? 'cover' : '';
     scene.style.backgroundPosition = image ? 'center' : '';
   }
-  applyLocalBackground(localStorage.getItem('dlm_local_background') || '');
+  
+  const legacyBg = localStorage.getItem('dlm_local_background');
+  if (legacyBg) applyLocalBackground(legacyBg);
+  else loadBg().then(data => { if(data) applyLocalBackground(data); }).catch(()=>{});
+
   if (backgroundBtn && backgroundInput) {
     backgroundBtn.addEventListener('click', () => backgroundInput.click());
     backgroundInput.addEventListener('change', () => {
@@ -1041,13 +1070,23 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!file) return;
       if (file.size > 25 * 1024 * 1024) { showToast('Choose an image smaller than 25 MB', 'error'); return; }
       const reader = new FileReader();
-      reader.onload = () => { try { localStorage.setItem('dlm_local_background', reader.result); applyLocalBackground(reader.result); showToast('Local background updated', 'success'); } catch (_) { showToast('Background could not be saved locally', 'error'); } };
+      reader.onload = () => {
+        saveBg(reader.result).then(() => {
+          localStorage.removeItem('dlm_local_background');
+          applyLocalBackground(reader.result);
+          showToast('Background updated', 'success');
+        }).catch(() => showToast('Background could not be saved', 'error'));
+      };
       reader.readAsDataURL(file);
     });
   }
   const clearBackgroundBtn = $('clearBackgroundBtn');
   if (clearBackgroundBtn) clearBackgroundBtn.addEventListener('click', () => {
-    localStorage.removeItem('dlm_local_background'); applyLocalBackground(''); showToast('Local background cleared', 'info');
+    clearBg().then(() => {
+      localStorage.removeItem('dlm_local_background');
+      applyLocalBackground('');
+      showToast('Background cleared', 'info');
+    });
   });
   const accentStart = $('accentStart'), accentEnd = $('accentEnd'), accentPreview = $('accentPreview');
   function applyAccent(start, end) {
@@ -1079,7 +1118,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!selectedGuildId) return;
       try {
         await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/speed?guildId=${selectedGuildId}&val=${val}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
-      } catch (err) { console.error(err); }
+      } catch (err) { console.error(err); showToast("API Error: " + err.message, "error"); }
     });
   }
   
@@ -1094,7 +1133,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!selectedGuildId) return;
       try {
         await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/pitch?guildId=${selectedGuildId}&val=${val}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
-      } catch (err) { console.error(err); }
+      } catch (err) { console.error(err); showToast("API Error: " + err.message, "error"); }
     });
   }
   // Volume slider and mute toggle
