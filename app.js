@@ -4,12 +4,13 @@
 'use strict';
 // Force update default API URL to the new one
 if (localStorage.getItem('dlm_api_url_migrated_v4') !== 'true') {
-  localStorage.setItem('dlm_api_url', 'https://quite-then-residence-moisture.trycloudflare.com');
+  localStorage.setItem('dlm_api_url', 'https://specially-mark-hire-allan.trycloudflare.com');
   localStorage.setItem('dlm_api_url_migrated_v4', 'true');
 }
-let API_BASE_URL    = localStorage.getItem('dlm_api_url') || 'https://quite-then-residence-moisture.trycloudflare.com';
+let API_BASE_URL    = localStorage.getItem('dlm_api_url') || 'https://specially-mark-hire-allan.trycloudflare.com';
 let selectedGuildId = null;
 let nowPlayingData  = null;
+let lastTadcTrack   = null;
 let queueData       = [];
 let isOnline        = false;
 let npTimer         = null;
@@ -75,7 +76,8 @@ function setOnline(online) {
   if (isOnline === online) return;
   isOnline = online;
   $('statusDot').className  = online ? 'status-dot online'  : 'status-dot offline';
-  $('statusText').textContent = online ? 'Connected' : 'Offline';
+  const locale = window.dlm_current_locale || localStorage.getItem('dlm_locale') || 'british';
+  $('statusText').textContent = online ? tr('statusConn', locale) : tr('statusDisco', locale);
   refreshButtonStates();
 }
 // ─── Polling ────────────────────────────────────
@@ -153,8 +155,9 @@ function updateNowPlaying(np) {
   const totTime     = $('totalTime');
   const viz         = $('visualizer');
   if (!np) {
-    title.textContent       = 'Nothing Playing';
-    artist.textContent      = 'Queue is empty';
+    const locale = window.dlm_current_locale || 'british';
+    title.textContent       = window.tr ? window.tr('npTitle', locale) : 'Nothing Playing';
+    artist.textContent      = window.tr ? window.tr('npArtist', locale) : 'Queue is empty';
     artImg.style.display    = 'none';
     placeholder.style.display = 'flex';
     artWrap.classList.remove('playing');
@@ -165,8 +168,8 @@ function updateNowPlaying(np) {
     totTime.textContent     = '0:00';
     viz.classList.remove('active');
     // Bottom bar
-    $('bbTitle').textContent = 'Nothing Playing';
-    $('bbArtist').textContent = 'Queue is empty';
+    $('bbTitle').textContent = window.tr ? window.tr('npTitle', locale) : 'Nothing Playing';
+    $('bbArtist').textContent = window.tr ? window.tr('npArtist', locale) : 'Queue is empty';
     $('bbArtImg').style.display = 'none';
     $('bbArtPlaceholder').style.display = 'flex';
     $('bbCurTime').textContent = '0:00';
@@ -177,6 +180,16 @@ function updateNowPlaying(np) {
   }
   // Update Recently Played History
   updateRecentlyPlayed(np);
+  
+  // TADC Easter Egg
+  if (np && np.title && np.title !== lastTadcTrack) {
+    lastTadcTrack = np.title;
+    const t = (np.title || '').toLowerCase();
+    if (t.includes('tadc') || t.includes('the amazing digital circus')) {
+      showToast('Enjoy TADC? Try another website by the owner! <a href="https://wackytadc.github.io" target="_blank" style="color: #8b5cf6; text-decoration: underline;">https://wackytadc.github.io</a> to watch TADC with Areas that have OneDrive and github.io Websites unblocked!', 'info', true);
+    }
+  }
+
   title.textContent  = np.title || 'Unknown Track';
   artist.textContent = 'DLM BlueSteel Player';
   if (np.thumbnail) {
@@ -225,6 +238,17 @@ function updateNowPlaying(np) {
     else isMuted = true;
     updateVolumeUI();
   }
+  
+  // Sync speed and pitch if available and not being dragged
+  if (typeof np.speed === 'number' && document.activeElement !== $('bbSpeedSlider')) {
+    $('bbSpeedSlider').value = np.speed;
+    $('bbSpeedVal').textContent = np.speed.toFixed(2) + 'x';
+  }
+  if (typeof np.pitch === 'number' && document.activeElement !== $('bbPitchSlider')) {
+    $('bbPitchSlider').value = np.pitch;
+    $('bbPitchVal').textContent = np.pitch.toFixed(2) + 'x';
+  }
+  
   refreshButtonStates();
 }
 // ─── Recently Played ─────────────────────────────
@@ -314,15 +338,28 @@ function renderFavorites() {
   const container = $('favoritesContainer');
   if (!container) return;
   if (!favorites.length) {
-    container.innerHTML = '<div class="empty-state-small">Use the heart in the player bar to save a favorite</div>';
+    container.innerHTML = `<div class="empty-state-small">${window.tr ? window.tr('emptyFav', window.dlm_current_locale || 'british') : 'Use the heart in the player bar to save a favorite'}</div>`;
     return;
   }
   container.innerHTML = favorites.map((track, i) => `
-    <div class="recent-card" data-index="${i}">
+    <div class="recent-card" data-index="${i}" style="position: relative;">
       <div class="recent-art">${track.thumbnail ? `<img src="${esc(track.thumbnail)}" alt="" />` : ''}<div class="recent-play-hover">▶</div></div>
-      <div class="recent-info"><div class="recent-title">${esc(track.title || 'Unknown')}</div></div>
+      <div class="recent-info">
+        <div class="recent-title">${esc(track.title || 'Unknown')}</div>
+      </div>
+      <button class="remove-fav-btn" data-index="${i}" title="${esc(window.tr ? window.tr('titleRemoveFav', window.dlm_current_locale || 'british') : 'Remove from favorites')}" style="position: absolute; right: 8px; top: 8px; background:rgba(0,0,0,0.6); border:none; color:white; cursor:pointer; font-size:14px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; z-index: 10; border-radius: 50%; transition: all 0.2s; backdrop-filter: blur(4px);" onmouseover="this.style.background='#ef4444'" onmouseout="this.style.background='rgba(0,0,0,0.6)'">✕</button>
     </div>`).join('');
-  container.querySelectorAll('.recent-card').forEach(card => card.addEventListener('click', () => {
+  container.querySelectorAll('.recent-card').forEach(card => card.addEventListener('click', (e) => {
+    if (e.target.closest('.remove-fav-btn')) {
+      e.stopPropagation();
+      const idx = Number(e.target.closest('.remove-fav-btn').dataset.index);
+      favorites.splice(idx, 1);
+      localStorage.setItem('dlm_favorites', JSON.stringify(favorites));
+      showToast(window.tr ? window.tr('msgRemovedFromFav', window.dlm_current_locale || 'british') : 'Removed from favorites', 'info');
+      renderFavorites();
+      updateFavoriteButton();
+      return;
+    }
     const track = favorites[Number(card.dataset.index)];
     if (track) addSong(track.url || track.title, null, null, null);
   }));
@@ -333,10 +370,10 @@ function toggleFavorite() {
   const index = favorites.findIndex(f => f.url && f.url === track.url);
   if (index >= 0) {
     favorites.splice(index, 1);
-    showToast('Removed from favorites', 'info');
+    showToast(window.tr ? window.tr('msgRemovedFromFav', window.dlm_current_locale || 'british') : 'Removed from favorites', 'info');
   } else {
     favorites.unshift(track);
-    showToast('Added to favorites', 'success');
+    showToast(window.tr ? window.tr('msgAddedToFav', window.dlm_current_locale || 'british') : 'Added to favorites', 'success');
   }
   localStorage.setItem('dlm_favorites', JSON.stringify(favorites));
   renderFavorites();
@@ -375,8 +412,8 @@ function renderQueue() {
     list.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
-        <p>Queue is empty</p>
-        <span>add songs using Quick Play or the add songs tab</span>
+        <p>${window.tr ? window.tr('queueEmpty', window.dlm_current_locale || 'british') : 'Queue is empty'}</p>
+        <span>${window.tr ? window.tr('lblQueueHint', window.dlm_current_locale || 'british') : 'add songs using Quick Play or the add songs tab'}</span>
       </div>`;
     return;
   }
@@ -428,16 +465,16 @@ function renderQueue() {
         const moved = queueData.splice(dragIndex, 1)[0];
         queueData.splice(to, 0, moved);
         renderQueue();
-      } catch (err) { showToast('Could not move track: ' + err.message, 'error'); pollQueue(); }
+      } catch (err) { showToast(`${tr('errMoveTrack', window.dlm_current_locale || 'british')}: ` + err.message, 'error'); pollQueue(); }
     });
   });
   // Also render for the small quick queue list (top 5 only)
   const smallList = $('quickQueueList');
   const queueBadge = $('queueBadge');
-  if (queueBadge) queueBadge.textContent = `${queueData.length} track${queueData.length !== 1 ? 's' : ''}`;
+  if (queueBadge) queueBadge.textContent = `${queueData.length} ${tr('lblTracks', window.dlm_current_locale || 'british')}`;
   if (smallList) {
     if (queueData.length === 0) {
-      smallList.innerHTML = `<div class="empty-state-small">Nothing in the queue</div>`;
+      smallList.innerHTML = `<div class="empty-state-small">${tr('msgNothingInQueue', window.dlm_current_locale || 'british')}</div>`;
     } else {
       const top5 = queueData.slice(0, 5);
       smallList.innerHTML = top5.map((track, i) => `
@@ -451,7 +488,7 @@ function renderQueue() {
             <div class="queue-title-small">${esc(track.title || 'Unknown')}</div>
             <div class="queue-duration-small">${esc(track.duration || '')}</div>
           </div>
-          <button class="queue-remove-small" data-index="${i}" title="Remove">
+          <button class="queue-remove-small" data-index="${i}" title="${tr('tipRemove', window.dlm_current_locale || 'british')}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
@@ -485,11 +522,11 @@ async function handlePlayPause() {
     if (nowPlayingData.paused) {
       iPlay.style.display = ''; iPause.style.display = 'none';
       viz.classList.remove('active'); art.classList.remove('playing');
-      showToast('Paused ⏸', 'info');
+      showToast(tr('msgPaused', window.dlm_current_locale || 'british') + ' ⏸', 'info');
     } else {
       iPlay.style.display = 'none'; iPause.style.display = '';
       viz.classList.add('active'); art.classList.add('playing');
-      showToast('Playing ▶', 'info');
+      showToast(tr('msgPlaying', window.dlm_current_locale || 'british') + ' ▶', 'info');
     }
     
     // Optimistic update for bottom bar
@@ -504,7 +541,7 @@ async function handlePlayPause() {
     }
     
   } catch (err) {
-    showToast(`Action failed: ${err.message}`, 'error');
+    showToast(`${tr('msgActionFailed', window.dlm_current_locale || 'british')}: ${err.message}`, 'error');
   } finally {
     $('btnPlayPause').disabled = false;
   }
@@ -515,10 +552,10 @@ async function handleSkip() {
   $('btnSkip').disabled = true;
   try {
     await apiFetch('/api/queue/skip', { method: 'POST', body: JSON.stringify({ guildId: selectedGuildId }) });
-    showToast('Skipped ⏭', 'success');
+    showToast(tr('msgSkipped', window.dlm_current_locale || 'british') + ' ⏭', 'success');
     setTimeout(() => { pollNowPlaying(); pollQueue(); }, 500);
   } catch (err) {
-    showToast('Skip failed: ' + err.message, 'error');
+    showToast(tr('msgSkipFailed', window.dlm_current_locale || 'british') + ': ' + err.message, 'error');
   } finally {
     setTimeout(() => { $('btnSkip').disabled = !nowPlayingData || !selectedGuildId; }, 800);
   }
@@ -528,13 +565,13 @@ async function handleStop() {
   $('btnStop').disabled = true;
   try {
     await apiFetch('/api/queue/stop', { method: 'POST', body: JSON.stringify({ guildId: selectedGuildId }) });
-    showToast('Stopped ⏹', 'info');
+    showToast(tr('msgStopped', window.dlm_current_locale || 'british') + ' ⏹', 'info');
     nowPlayingData = null;
     queueData = [];
     updateNowPlaying(null);
     renderQueue();
   } catch (err) {
-    showToast('Stop failed: ' + err.message, 'error');
+    showToast(tr('msgStopFailed', window.dlm_current_locale || 'british') + ': ' + err.message, 'error');
   } finally {
     $('btnStop').disabled = true; // stays disabled until something plays
   }
@@ -544,11 +581,11 @@ async function handleClearQueue() {
   $('clearQueueBtn').disabled = true;
   try {
     await apiFetch('/api/queue/clear', { method: 'POST', body: JSON.stringify({ guildId: selectedGuildId }) });
-    showToast('Queue cleared 🗑️', 'info');
+    showToast(tr('msgQueueCleared', window.dlm_current_locale || 'british') + ' 🗑️', 'info');
     queueData = [];
     renderQueue();
   } catch (err) {
-    showToast('Clear failed: ' + err.message, 'error');
+    showToast(tr('msgClearFailed', window.dlm_current_locale || 'british') + ': ' + err.message, 'error');
   } finally {
     $('clearQueueBtn').disabled = false;
   }
@@ -557,10 +594,10 @@ async function handleShuffle() {
   if (!selectedGuildId) return;
   try {
     const data = await apiFetch(`/api/queue/shuffle?guildId=${selectedGuildId}`, { method: 'POST' });
-    showToast(`Shuffled ${data.count || 0} songs 🔀`, 'success');
+    showToast(`${tr('msgShuffled', window.dlm_current_locale || 'british')} ${data.count || 0} ${tr('lblSongs', window.dlm_current_locale || 'british')} 🔀`, 'success');
     setTimeout(() => { pollNowPlaying(); pollQueue(); }, 500);
   } catch (err) {
-    showToast('Shuffle failed: ' + err.message, 'error');
+    showToast(tr('msgShuffleFailed', window.dlm_current_locale || 'british') + ': ' + err.message, 'error');
   }
 }
 async function removeFromQueue(index) {
@@ -569,17 +606,17 @@ async function removeFromQueue(index) {
     await apiFetch('/api/queue/remove', { method: 'POST', body: JSON.stringify({ guildId: selectedGuildId, index }) });
     queueData.splice(index, 1);
     renderQueue();
-    showToast('Removed from queue', 'info');
+    showToast(tr('msgRemovedFromQueue', window.dlm_current_locale || 'british'), 'info');
   } catch (err) {
-    showToast('Remove failed: ' + err.message, 'error');
+    showToast(tr('msgRemoveFailed', window.dlm_current_locale || 'british') + ': ' + err.message, 'error');
     setTimeout(pollQueue, 500);
   }
 }
 async function addSong(queryOrUrl, statusEl, inputEl, btnEl) {
-  if (!selectedGuildId) { showToast('No server selected', 'error'); return false; }
+  if (!selectedGuildId) { showToast(tr('errNoServerSelected', window.dlm_current_locale || 'british'), 'error'); return false; }
   if (!queryOrUrl || !queryOrUrl.trim()) return false;
   if (btnEl)    btnEl.disabled    = true;
-  if (statusEl) { statusEl.className = 'add-status loading'; statusEl.textContent = 'Adding to queue...'; }
+  if (statusEl) { statusEl.className = 'add-status loading'; statusEl.textContent = tr('lblAddingToQueue', window.dlm_current_locale || 'british') + '...'; }
   try {
     await apiFetch('/api/queue/add', {
       method: 'POST',
@@ -588,10 +625,10 @@ async function addSong(queryOrUrl, statusEl, inputEl, btnEl) {
     if (inputEl)  inputEl.value = '';
     if (statusEl) {
       statusEl.className   = 'add-status success';
-      statusEl.textContent = '✓ Added to queue!';
+      statusEl.textContent = '✓ ' + tr('lblAddedToQueue', window.dlm_current_locale || 'british') + '!';
       setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'add-status'; }, 3000);
     }
-    showToast('Added to queue 🎵', 'success');
+    showToast(tr('msgAddedToQueue', window.dlm_current_locale || 'british') + ' 🎵', 'success');
     setTimeout(pollQueue, 800);
     return true;
   } catch (err) {
@@ -833,7 +870,15 @@ function setView(name) {
     requestAnimationFrame(() => requestAnimationFrame(() => view.classList.add('active')));
   }
   if (navBtn) navBtn.classList.add('active');
-  const titles = { player: 'Player', queue: 'Queue', search: 'Add Songs', favorites: localStorage.getItem('dlm_locale') === 'american' ? 'Favorites' : 'Favourites', 'user-settings': 'User Settings', settings: 'Settings' };
+  const locale = window.dlm_current_locale || localStorage.getItem('dlm_locale') || 'british';
+  const titles = { 
+    player: tr('navPlayer', locale), 
+    queue: tr('navQueue', locale), 
+    search: tr('navAdd', locale), 
+    favorites: tr('navFav', locale), 
+    'user-settings': tr('navSet', locale), 
+    settings: tr('pinTitle', locale) 
+  };
   $('pageTitle').textContent = titles[name] || name;
   // Toggle Bottom Player Bar visibility (only on player view when not classic)
   const bb = document.querySelector('.bottom-player-bar');
@@ -843,16 +888,16 @@ function setView(name) {
   }
 }
 // ─── Toast ──────────────────────────────────────
-function showToast(message, type = 'info') {
+function showToast(message, type = 'info', allowHtml = false) {
   const container = $('toastContainer');
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  toast.innerHTML = `<span class="toast-dot"></span><span>${esc(message)}</span>`;
+  toast.innerHTML = `<span class="toast-dot"></span><span>${allowHtml ? message : esc(message)}</span>`;
   container.appendChild(toast);
   setTimeout(() => {
     toast.classList.add('removing');
     toast.addEventListener('animationend', () => toast.remove(), { once: true });
-  }, 3500);
+  }, allowHtml ? 10000 : 3500);
 }
 // ─── Utils ──────────────────────────────────────
 function esc(str) {
@@ -1007,20 +1052,277 @@ document.addEventListener('DOMContentLoaded', () => {
     effectsBtn.addEventListener('click', e => { e.stopPropagation(); effectsPanel.classList.toggle('open'); });
     document.addEventListener('click', e => { if (!effectsPanel.contains(e.target) && e.target !== effectsBtn) effectsPanel.classList.remove('open'); });
   }
-  // Local language preference: British spelling is the default.
+  // Local language preference
   const localeSelect = $('localeSelect');
-  function applyLocale(locale) {
-    const british = locale !== 'american';
-    localStorage.setItem('dlm_locale', british ? 'british' : 'american');
-    document.documentElement.lang = british ? 'en-GB' : 'en-US';
-    if (localeSelect) localeSelect.value = british ? 'british' : 'american';
-    const label = british ? 'Favourites' : 'Favorites';
-    const navLabel = document.querySelector('#nav-favorites span');
-    const viewTitle = document.querySelector('#view-favorites .section-title');
-    if (navLabel) navLabel.textContent = label;
-    if (viewTitle) viewTitle.textContent = label;
-    if (document.querySelector('#nav-favorites.active')) $('pageTitle').textContent = label;
+  
+  const I18N = {
+    british: {
+      navPlayer: 'Player', navQueue: 'Queue', navAdd: 'Add Songs', navFav: 'Favourites', navSet: 'User Settings',
+      titleQueue: 'Up Next', titleAdd: 'Add to Queue', titleFav: 'Favourites', titleSet: 'User Settings',
+      queueEmpty: 'Nothing in the queue', searchPlaceholder: 'Search YouTube or paste a URL / playlist...',
+      langTitle: 'Language', langDesc: 'British English is the default for this browser.',
+      bgTitle: 'Background', bgDesc: 'Upload a custom wallpaper (25MB limit).',
+      accentTitle: 'Accent Gradient', accentDesc: 'Choose any two colours for your local gradient.',
+      statusConn: 'Connected', statusDisco: 'Disconnected',
+      npTitle: 'Nothing Playing', npArtist: 'Queue is empty',
+      btnOldUi: 'Switch to Old UI', lblServer: 'Server', lblMusicPlayer: 'Music Player',
+      btnChooseBg: 'Choose Background', btnResetBg: 'Reset to Default Background',
+      lblStart: 'Start ', lblEnd: 'End ', btnResetAcc: 'Reset to Default Accent',
+      lblSpeed: 'Speed', lblPitch: 'Pitch',
+      lblRecent: 'Recently played', lblQuickQueue: 'Quick Queue ', btnAddSong: 'Add song',
+      lblTracks: 'tracks', lblTracksInQueue: 'tracks in queue',
+      topSearchPlaceholder: 'Search songs, artists, albums...',
+      btnShuffle: 'Shuffle', btnClearAll: 'Clear All', lblQueueHint: 'Add Songs using the Quick Play or Add Songs tabs',
+      lblSearchHint: 'Search YouTube — pick a result and hit + to add', btnUploadMp3: 'Upload MP3',
+      btnClearRecent: 'Clear Recently Played', descClearRecent: 'Wipe all tracks currently stored in your recently played dashboard history.',
+      tabClearHistory: 'Clear History',
+      pinTitle: 'Settings Locked', pinDesc: 'Enter your PIN to access Settings', btnCancel: 'Cancel',
+      tabAnnounce: 'Announcements', descAnnounce: 'Send an announcement to the selected server. Choose a preset or write your own message.',
+      phAnnounce: 'Announcement message...', btnSendAnnounce: 'Send announcement',
+      tabMaint: 'Maintenance mode', descMaint: 'Stops all music, clears queues, notifies servers, and disconnects the bot until switched off.',
+      btnEnableMaint: 'Enable maintenance', btnDisableMaint: 'Disable maintenance', lblMaintOff: 'Maintenance is off.', lblMaintOn: 'Maintenance is on.',
+      tabApi: 'Bot API URL', descApi: 'The URL where your DLM BlueSteel Player bot is running its HTTP server.',
+      btnSaveLocal: 'Save (Local)', btnTestConn: 'Test Connection', btnChangeGlobal: 'Change Global URL (Exec)',
+      tabSecurity: 'Security Note', descSecurity: 'Your dashboard communicates directly with your local bot server. Never share your API URL publicly — use ngrok or a VPN for remote access.',
+      tabAbout: 'About',
+      lblUnlocked: 'Settings unlocked \u2713',
+      msgNothingInQueue: 'Nothing in the queue', msgPaused: 'Paused', msgPlaying: 'Playing', msgActionFailed: 'Action Failed',
+      msgSkipped: 'Skipped', msgSkipFailed: 'Skip failed', msgStopped: 'Stopped', msgStopFailed: 'Stop failed',
+      msgQueueCleared: 'Queue Cleared', msgClearFailed: 'Clear failed', msgShuffled: 'Shuffled', lblSongs: 'songs',
+      msgShuffleFailed: 'Shuffle failed', msgRemovedFromQueue: 'Removed from queue', msgRemoveFailed: 'Remove failed',
+      errNoServerSelected: 'Select a server first!', msgAddedToQueue: 'Added to queue', errMoveTrack: 'Failed to move track',
+      lblAddedToQueue: 'Added', descFav: 'Saved songs are stored in this browser.', emptyFav: 'Use the heart in the player bar to save a favorite',
+      titleRemoveFav: 'Remove from favorites', msgRemovedFromFav: 'Removed from favorites', msgAddedToFav: 'Added to favorites'
+    },
+    american: {
+      navFav: 'Favorites', titleFav: 'Favorites',
+      langDesc: 'American English selected.', accentDesc: 'Choose any two colors for your local gradient.'
+    },
+    polish: {
+      navPlayer: 'Odtwarzacz', navQueue: 'Kolejka', navAdd: 'Dodaj Utwory', navFav: 'Ulubione', navSet: 'Ustawienia Użytkownika',
+      titleQueue: 'Następnie', titleAdd: 'Dodaj do Kolejki', titleFav: 'Ulubione', titleSet: 'Ustawienia Użytkownika',
+      queueEmpty: 'Nic w kolejce', searchPlaceholder: 'Szukaj w YouTube lub wpisz URL / playlistę...',
+      langTitle: 'Język', langDesc: 'Wybierz preferowany język.',
+      bgTitle: 'Tło', bgDesc: 'Prześlij własną tapetę (limit 25MB).',
+      accentTitle: 'Akcent (Gradient)', accentDesc: 'Wybierz dowolne dwa kolory dla lokalnego gradientu.',
+      statusConn: 'Po\u0142\u0105czono', statusDisco: 'Roz\u0142\u0105czono',
+      npTitle: 'Nic nie jest odtwarzane', npArtist: 'Kolejka jest pusta',
+      btnOldUi: 'Zmień na Stare UI', lblServer: 'Serwer', lblMusicPlayer: 'Odtwarzacz',
+      btnChooseBg: 'Wybierz Tło', btnResetBg: 'Zresetuj Tło',
+      lblStart: 'Początek ', lblEnd: 'Koniec ', btnResetAcc: 'Zresetuj Akcent',
+      lblSpeed: 'Szybkość', lblPitch: 'Wysokość',
+      lblRecent: 'Ostatnio odtwarzane', lblQuickQueue: 'Szybka Kolejka ', btnAddSong: 'Dodaj utwór',
+      lblTracks: 'utworów', lblTracksInQueue: 'utworów w kolejce',
+      topSearchPlaceholder: 'Szukaj piosenek, artystów, albumów...',
+      btnShuffle: 'Tasuj', btnClearAll: 'Wyczyść Wszystko', lblQueueHint: 'Dodaj utwory używając Szybkiego Odtwarzania lub zakładki Dodaj Utwory',
+      lblSearchHint: 'Szukaj w YouTube — wybierz wynik i kliknij + aby dodać', btnUploadMp3: 'Wgraj MP3',
+      btnClearRecent: 'Wyczyść Historię', descClearRecent: 'Usuń wszystkie utwory obecnie zapisane w historii ostatnio odtwarzanych na panelu.',
+      tabClearHistory: 'Wyczyść Historię',
+      pinTitle: 'Ustawienia Zablokowane', pinDesc: 'Wprowadź kod PIN, aby uzyskać dostęp do Ustawień', btnCancel: 'Anuluj',
+      tabAnnounce: 'Ogłoszenia', descAnnounce: 'Wyślij ogłoszenie na wybrany serwer. Wybierz z szablonu lub napisz własną wiadomość.',
+      phAnnounce: 'Wiadomość ogłoszenia...', btnSendAnnounce: 'Wyślij ogłoszenie',
+      tabMaint: 'Tryb Konserwacji', descMaint: 'Zatrzymuje muzykę, czyści kolejki, powiadamia serwery i rozłącza bota, dopóki nie zostanie wyłączony.',
+      btnEnableMaint: 'Włącz konserwację', btnDisableMaint: 'Wyłącz konserwację', lblMaintOff: 'Konserwacja wyłączona.', lblMaintOn: 'Konserwacja włączona.',
+      tabApi: 'URL Bot API', descApi: 'Adres URL, pod którym działa serwer HTTP bota DLM BlueSteel Player.',
+      btnSaveLocal: 'Zapisz (Lokalnie)', btnTestConn: 'Testuj Połączenie', btnChangeGlobal: 'Zmień Globalny URL (Exec)',
+      tabSecurity: 'Informacja o Bezpieczeństwie', descSecurity: 'Twój panel komunikuje się bezpośrednio z lokalnym serwerem bota. Nigdy nie udostępniaj swojego adresu URL API publicznie — użyj ngrok lub VPN do zdalnego dostępu.',
+      tabAbout: 'O Aplikacji',
+      lblUnlocked: 'Ustawienia odblokowane \u2713',
+      msgNothingInQueue: 'Nic w kolejce', msgPaused: 'Wstrzymano', msgPlaying: 'Odtwarzanie', msgActionFailed: 'Akcja nie powiod\u0142a si\u0119',
+      msgSkipped: 'Pomini\u0119to', msgSkipFailed: 'Pomini\u0119cie nie powiod\u0142o si\u0119', msgStopped: 'Zatrzymano', msgStopFailed: 'Zatrzymanie nie powiod\u0142o si\u0119',
+      msgQueueCleared: 'Kolejka wyczyszczona', msgClearFailed: 'Wyczyszczenie nie powiod\u0142o si\u0119', msgShuffled: 'Potasowano', lblSongs: 'utwory',
+      msgShuffleFailed: 'Tasowanie nie powiod\u0142o si\u0119', msgRemovedFromQueue: 'Usuni\u0119to z kolejki', msgRemoveFailed: 'Usuni\u0119cie nie powiod\u0142o si\u0119',
+      errNoServerSelected: 'Najpierw wybierz serwer!', msgAddedToQueue: 'Dodano do kolejki', errMoveTrack: 'Nie uda\u0142o si\u0119 przenie\u015b\u0107 utworu',
+      lblAddedToQueue: 'Dodano', descFav: 'Zapisane utwory s\u0105 przechowywane w tej przegl\u0105darce.', emptyFav: 'U\u017cyj serduszka na pasku odtwarzacza, aby zapisa\u0107 w ulubionych',
+      titleRemoveFav: 'Usu\u0144 z ulubionych', msgRemovedFromFav: 'Usuni\u0119to z ulubionych', msgAddedToFav: 'Dodano do ulubionych'
+    }
+  };
+
+  window.I18N = I18N;
+
+  function tr(key, locale) {
+    return (I18N[locale] && I18N[locale][key]) ? I18N[locale][key] : I18N['british'][key];
   }
+  window.tr = tr;
+
+  function applyLocale(locale) {
+    if (!['british', 'american', 'polish'].includes(locale)) locale = 'british';
+    localStorage.setItem('dlm_locale', locale);
+    window.dlm_current_locale = locale;
+    document.documentElement.lang = locale === 'polish' ? 'pl' : (locale === 'american' ? 'en-US' : 'en-GB');
+    if (localeSelect) localeSelect.value = locale;
+
+    // Sidebar
+    if (document.querySelector('#nav-player span')) document.querySelector('#nav-player span').textContent = tr('navPlayer', locale);
+    if (document.querySelector('#nav-queue span')) document.querySelector('#nav-queue span').textContent = tr('navQueue', locale);
+    if (document.querySelector('#nav-search span')) document.querySelector('#nav-search span').textContent = tr('navAdd', locale);
+    if (document.querySelector('#nav-favorites span')) document.querySelector('#nav-favorites span').textContent = tr('navFav', locale);
+    if (document.querySelector('#nav-user-settings span')) document.querySelector('#nav-user-settings span').textContent = tr('navSet', locale);
+
+    // View Titles
+    if (document.querySelector('#view-queue .section-title')) document.querySelector('#view-queue .section-title').textContent = tr('titleQueue', locale);
+    if (document.querySelector('#view-search .section-title')) document.querySelector('#view-search .section-title').textContent = tr('titleAdd', locale);
+    if (document.querySelector('#view-favorites .section-title')) document.querySelector('#view-favorites .section-title').textContent = tr('titleFav', locale);
+    if (document.querySelector('#view-favorites .section-sub')) document.querySelector('#view-favorites .section-sub').textContent = tr('descFav', locale);
+    if (document.querySelector('#view-user-settings .section-title')) document.querySelector('#view-user-settings .section-title').textContent = tr('titleSet', locale);
+
+    // Settings Text
+    document.querySelectorAll('#view-user-settings .settings-card').forEach(card => {
+      if (card.innerHTML.includes('localeSelect')) {
+        card.querySelector('h3').textContent = tr('langTitle', locale);
+        card.querySelector('p').textContent = tr('langDesc', locale);
+      } else if (card.innerHTML.includes('backgroundInput')) {
+        card.querySelector('h3').textContent = tr('bgTitle', locale);
+        card.querySelector('p').textContent = tr('bgDesc', locale);
+        if ($('backgroundBtn')) $('backgroundBtn').textContent = tr('btnChooseBg', locale);
+        if ($('clearBackgroundBtn')) $('clearBackgroundBtn').textContent = tr('btnResetBg', locale);
+      } else if (card.innerHTML.includes('accentStart')) {
+        card.querySelector('h3').textContent = tr('accentTitle', locale);
+        card.querySelector('p').textContent = tr('accentDesc', locale);
+        if ($('resetAccentBtn')) $('resetAccentBtn').textContent = tr('btnResetAcc', locale);
+        const startLbl = document.querySelector('label:has(#accentStart)');
+        if (startLbl) startLbl.childNodes[0].textContent = tr('lblStart', locale);
+        const endLbl = document.querySelector('label:has(#accentEnd)');
+        if (endLbl) endLbl.childNodes[0].textContent = tr('lblEnd', locale);
+      }
+    });
+
+    // Inputs & other UI text
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) searchInput.placeholder = tr('searchPlaceholder', locale);
+    const songInput = document.getElementById('songInput');
+    if (songInput) songInput.placeholder = tr('searchPlaceholder', locale);
+    const quickSearchInput = document.getElementById('quickSearchInput');
+    if (quickSearchInput) quickSearchInput.placeholder = tr('searchPlaceholder', locale);
+    const quickSearchInputNew = document.getElementById('quickSearchInputNew');
+    if (quickSearchInputNew) quickSearchInputNew.placeholder = tr('searchPlaceholder', locale);
+    const topNavSearch = document.getElementById('topNavSearch');
+    if (topNavSearch) topNavSearch.placeholder = tr('topSearchPlaceholder', locale);
+    
+    const mp3UploadLbl = document.querySelector('label[for="mp3FileInput"]');
+    if (mp3UploadLbl && mp3UploadLbl.childNodes.length > 2) {
+      mp3UploadLbl.childNodes[2].textContent = ' ' + tr('btnUploadMp3', locale);
+    }
+
+    if ($('toggleUiBtn')) $('toggleUiBtn').textContent = tr('btnOldUi', locale);
+    const serverLbl = document.querySelector('.server-label');
+    if (serverLbl) serverLbl.textContent = tr('lblServer', locale);
+    
+    // Bottom Player Filters
+    const bbSpeedSlider = $('bbSpeedSlider');
+    if (bbSpeedSlider && bbSpeedSlider.previousElementSibling) bbSpeedSlider.previousElementSibling.textContent = tr('lblSpeed', locale);
+    const bbPitchSlider = $('bbPitchSlider');
+    if (bbPitchSlider && bbPitchSlider.previousElementSibling) bbPitchSlider.previousElementSibling.textContent = tr('lblPitch', locale);
+
+    // Empty text & Queue text
+    const queueEmptyText = document.querySelector('#view-queue p');
+    if (queueEmptyText && queueEmptyText.textContent.includes('queue') || queueEmptyText && queueEmptyText.textContent.includes('kolejce') || queueEmptyText && queueEmptyText.textContent.includes('Nic w')) {
+      queueEmptyText.textContent = tr('queueEmpty', locale);
+    }
+    const quickQueueEmptyText = document.querySelector('#quickQueueList .empty-state-small');
+    if (quickQueueEmptyText) {
+      quickQueueEmptyText.textContent = tr('queueEmpty', locale);
+    }
+    const queueHint = document.querySelector('#view-queue span');
+    if (queueHint && (queueHint.textContent.includes('tabs') || queueHint.textContent.includes('zakładki'))) queueHint.textContent = tr('lblQueueHint', locale);
+
+    // Player View Titles & Buttons
+    const headers = document.querySelectorAll('#view-player .section-header-row h2');
+    if (headers && headers.length > 0) headers[0].textContent = tr('lblRecent', locale);
+    
+    const quickQueueH2 = document.querySelector('#queueBadge');
+    if (quickQueueH2 && quickQueueH2.parentNode && quickQueueH2.parentNode.childNodes[0]) {
+      quickQueueH2.parentNode.childNodes[0].textContent = tr('lblQuickQueue', locale);
+    }
+    
+    // The "Add song" button might be the only ghost-btn inside queue-header
+    const addSongBtn = document.querySelector('#view-player .queue-header button');
+    if (addSongBtn && addSongBtn.childNodes.length > 1) addSongBtn.childNodes[addSongBtn.childNodes.length-1].textContent = ' ' + tr('btnAddSong', locale);
+
+    if ($('shuffleQueueBtn')) $('shuffleQueueBtn').childNodes[$('shuffleQueueBtn').childNodes.length-1].textContent = ' ' + tr('btnShuffle', locale);
+    if ($('clearQueueBtn')) $('clearQueueBtn').childNodes[$('clearQueueBtn').childNodes.length-1].textContent = ' ' + tr('btnClearAll', locale);
+
+    const searchHint = document.querySelector('#view-search .section-sub');
+    if (searchHint) searchHint.textContent = tr('lblSearchHint', locale);
+    
+    const uploadLabel = document.querySelector('label[for="mp3Upload"]');
+    if (uploadLabel && uploadLabel.childNodes.length > 1) uploadLabel.childNodes[uploadLabel.childNodes.length-1].textContent = ' ' + tr('btnUploadMp3', locale);
+    
+    if ($('clearRecentBtn')) {
+      $('clearRecentBtn').textContent = tr('btnClearRecent', locale);
+      const prevP = $('clearRecentBtn').parentNode.previousElementSibling;
+      if (prevP && prevP.tagName === 'P') prevP.textContent = tr('descClearRecent', locale);
+    }
+
+    // PIN Screen Text
+    const pinTitle = document.querySelector('#pinOverlay h2');
+    if (pinTitle) pinTitle.textContent = tr('pinTitle', locale);
+    const pinDesc = document.querySelector('#pinOverlay p');
+    if (pinDesc) pinDesc.textContent = tr('pinDesc', locale);
+    const pinCancel = document.querySelector('#pinCancelBtn');
+    if (pinCancel) pinCancel.textContent = tr('btnCancel', locale);
+    
+    // Main Settings Screen Text
+    document.querySelectorAll('#view-settings .settings-card').forEach(card => {
+      const title = card.querySelector('h3');
+      const desc = card.querySelector('p');
+      if (card.innerHTML.includes('sendAnnouncementBtn')) {
+        if (title) title.textContent = tr('tabAnnounce', locale);
+        if (desc) desc.textContent = tr('descAnnounce', locale);
+        const btn = card.querySelector('#sendAnnouncementBtn');
+        if (btn) btn.textContent = tr('btnSendAnnounce', locale);
+        const input = card.querySelector('#announcementInput');
+        if (input) input.placeholder = tr('phAnnounce', locale);
+      } else if (card.innerHTML.includes('maintenanceBtn')) {
+        if (title) title.textContent = tr('tabMaint', locale);
+        if (desc) desc.textContent = tr('descMaint', locale);
+        const maintBtn = card.querySelector('#maintenanceBtn');
+        if (maintBtn && maintBtn.textContent.includes('Enable') || maintBtn && maintBtn.textContent.includes('Włącz')) {
+          maintBtn.textContent = tr('btnEnableMaint', locale);
+        } else if (maintBtn) {
+          maintBtn.textContent = tr('btnDisableMaint', locale);
+        }
+        const maintStatus = card.querySelector('#maintenanceStatus');
+        if (maintStatus && (maintStatus.textContent.includes('off') || maintStatus.textContent.includes('wyłączona'))) {
+          maintStatus.textContent = tr('lblMaintOff', locale);
+        } else if (maintStatus && maintStatus.textContent.trim().length > 0) {
+          maintStatus.textContent = tr('lblMaintOn', locale);
+        }
+      } else if (card.innerHTML.includes('saveApiBtn')) {
+        if (title) title.textContent = tr('tabApi', locale);
+        if (desc) desc.textContent = tr('descApi', locale);
+        const btnSave = card.querySelector('#saveApiBtn');
+        if (btnSave) btnSave.textContent = tr('btnSaveLocal', locale);
+        const btnTest = card.querySelector('#testApiBtn');
+        if (btnTest) btnTest.textContent = tr('btnTestConn', locale);
+        const btnChange = card.querySelector('#execApiBtn');
+        if (btnChange && btnChange.childNodes.length > 1) btnChange.childNodes[btnChange.childNodes.length-1].textContent = ' ' + tr('btnChangeGlobal', locale);
+      } else if (card.innerHTML.includes('CORS Enabled')) {
+        if (title) title.textContent = tr('tabSecurity', locale);
+        if (desc) desc.textContent = tr('descSecurity', locale);
+      } else if (card.innerHTML.includes('clearRecentBtn')) {
+        if (title) title.textContent = tr('tabClearHistory', locale);
+      } else if (card.innerHTML.includes('Built with')) {
+        if (title) title.textContent = tr('tabAbout', locale);
+      }
+    });
+    
+    // Status badges
+    const settingsUnlockedBadge = document.querySelector('.bottom-bar-left span');
+    if (settingsUnlockedBadge && (settingsUnlockedBadge.textContent.includes('Settings') || settingsUnlockedBadge.textContent.includes('Ustawienia'))) {
+      settingsUnlockedBadge.textContent = tr('lblUnlocked', locale);
+    }
+    
+    // Page Title
+    const activeNav = document.querySelector('.sidebar-nav a.active span') || document.querySelector('.sidebar-nav button.active span');
+    if (activeNav && $('pageTitle')) $('pageTitle').textContent = activeNav.textContent;
+    const mpLabel = document.querySelector('.topbar-left span');
+    if (mpLabel) mpLabel.textContent = tr('lblMusicPlayer', locale);
+    
+    // Trigger track count translation if possible
+    window.dlm_current_locale = locale; // store globally for dynamically injected text
+  }
+  
   if (localeSelect) {
     applyLocale(localStorage.getItem('dlm_locale') || 'british');
     localeSelect.addEventListener('change', () => applyLocale(localeSelect.value));

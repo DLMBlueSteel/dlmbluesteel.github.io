@@ -1295,6 +1295,11 @@ body {
 
 .settings-input::placeholder { color: var(--text-muted); }
 
+select.settings-input option {
+  background: #1a1a2e;
+  color: var(--text-primary);
+}
+
 .settings-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .test-result {
