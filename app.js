@@ -4,10 +4,10 @@
 'use strict';
 // Force update default API URL to the new one
 if (localStorage.getItem('dlm_api_url_migrated_v4') !== 'true') {
-  localStorage.setItem('dlm_api_url', 'https://specially-mark-hire-allan.trycloudflare.com');
+  localStorage.setItem('dlm_api_url', 'https://quite-then-residence-moisture.trycloudflare.com');
   localStorage.setItem('dlm_api_url_migrated_v4', 'true');
 }
-let API_BASE_URL    = localStorage.getItem('dlm_api_url') || 'https://specially-mark-hire-allan.trycloudflare.com';
+let API_BASE_URL    = localStorage.getItem('dlm_api_url') || 'https://quite-then-residence-moisture.trycloudflare.com';
 let selectedGuildId = null;
 let nowPlayingData  = null;
 let lastTadcTrack   = null;
@@ -54,7 +54,8 @@ async function sendVolumeChange(vol) {
 const $ = id => document.getElementById(id);
 // ─── Fetch ──────────────────────────────────────
 async function apiFetch(path, opts = {}) {
-  const url = API_BASE_URL.replace(/\/$/, '') + path;
+  const separator = path.includes('?') ? '&' : '?';
+  const url = API_BASE_URL.replace(/\/$/, '') + path + separator + '_t=' + Date.now();
   const res = await fetch(url, {
     ...opts,
     headers: {
