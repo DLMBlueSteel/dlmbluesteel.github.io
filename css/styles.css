@@ -140,23 +140,32 @@ body {
 }
 
 .brand-logo {
-  width: 40px;
-  height: 40px;
+  width: 50px;
+  height: 50px;
   flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--accent-grad);
+  box-shadow: 0 0 24px var(--accent-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .brand-logo img {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  object-fit: cover;
-  filter: drop-shadow(0 0 12px rgba(99,102,241,0.5));
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  mix-blend-mode: screen;
+  transform: scale(1);
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.3));
   animation: logoPulse 3s ease-in-out infinite;
+  opacity: 0.9;
 }
 
 @keyframes logoPulse {
-  0%, 100% { filter: drop-shadow(0 0 12px rgba(99,102,241,0.4)); }
-  50%       { filter: drop-shadow(0 0 20px rgba(99,102,241,0.8)); }
+  0%, 100% { opacity: 0.9; }
+  50%       { opacity: 1; }
 }
 
 .brand-text {
@@ -1670,3 +1679,26 @@ body {
   gap: 10px;
 }
 
+/* Unified glass surface — matches the Add Song tab's clean, light frosted look */
+.glass-card, .recent-card, .queue-item, .queue-item-small, .search-result-item,
+.settings-card, .effects-panel, .toast, .pin-box, .sidebar, .section-frame,
+.horizontal-scroll, #queueList, .queue-list-small, .context-menu {
+  background: rgba(255, 255, 255, 0.045) !important;
+  border: 1px solid rgba(255, 255, 255, 0.09) !important;
+  backdrop-filter: blur(20px) saturate(120%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(120%) !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18) !important;
+}
+
+.glass-card:hover, .recent-card:hover, .queue-item:hover, .queue-item-small:hover, .search-result-item:hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border-color: rgba(255, 255, 255, 0.13) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25) !important;
+}
+
+.topbar {
+  background: rgba(255, 255, 255, 0.03) !important;
+  backdrop-filter: blur(20px) saturate(120%);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
