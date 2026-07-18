@@ -4,13 +4,12 @@
 'use strict';
 // Force update default API URL to the new one
 if (localStorage.getItem('dlm_api_url_migrated_v4') !== 'true') {
-  localStorage.setItem('dlm_api_url', 'https://quite-then-residence-moisture.trycloudflare.com');
+  localStorage.setItem('dlm_api_url', 'https://specially-mark-hire-allan.trycloudflare.com');
   localStorage.setItem('dlm_api_url_migrated_v4', 'true');
 }
-let API_BASE_URL    = localStorage.getItem('dlm_api_url') || 'https://quite-then-residence-moisture.trycloudflare.com';
+let API_BASE_URL    = localStorage.getItem('dlm_api_url') || 'https://specially-mark-hire-allan.trycloudflare.com';
 let selectedGuildId = null;
 let nowPlayingData  = null;
-let lastTadcTrack   = null;
 let queueData       = [];
 let isOnline        = false;
 let npTimer         = null;
@@ -48,14 +47,13 @@ async function sendVolumeChange(vol) {
   if (!selectedGuildId) return;
   try {
     await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/volume?guildId=${selectedGuildId}&val=${vol}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
-  } catch (err) { console.error(err); showToast("API Error: " + err.message, "error"); }
+  } catch (err) { console.error(err); }
 }
 // ─── DOM ────────────────────────────────────────
 const $ = id => document.getElementById(id);
 // ─── Fetch ──────────────────────────────────────
 async function apiFetch(path, opts = {}) {
-  const separator = path.includes('?') ? '&' : '?';
-  const url = API_BASE_URL.replace(/\/$/, '') + path + separator + '_t=' + Date.now();
+  const url = API_BASE_URL.replace(/\/$/, '') + path;
   const res = await fetch(url, {
     ...opts,
     headers: {
@@ -77,8 +75,15 @@ function setOnline(online) {
   if (isOnline === online) return;
   isOnline = online;
   $('statusDot').className  = online ? 'status-dot online'  : 'status-dot offline';
-  const locale = window.dlm_current_locale || localStorage.getItem('dlm_locale') || 'british';
-  $('statusText').textContent = online ? tr('statusConn', locale) : tr('statusDisco', locale);
+  if (online) {
+    if (localStorage.getItem('dlm_image_blobs_enabled') === 'true') {
+      $('statusText').textContent = 'Easter Egg Enabled: To Disable, use PIN 8008 in Admin Settings';
+    } else {
+      $('statusText').textContent = 'Connected';
+    }
+  } else {
+    $('statusText').textContent = 'Offline';
+  }
   refreshButtonStates();
 }
 // ─── Polling ────────────────────────────────────
@@ -156,9 +161,8 @@ function updateNowPlaying(np) {
   const totTime     = $('totalTime');
   const viz         = $('visualizer');
   if (!np) {
-    const locale = window.dlm_current_locale || 'british';
-    title.textContent       = window.tr ? window.tr('npTitle', locale) : 'Nothing Playing';
-    artist.textContent      = window.tr ? window.tr('npArtist', locale) : 'Queue is empty';
+    title.textContent       = 'Nothing Playing';
+    artist.textContent      = 'Queue is empty';
     artImg.style.display    = 'none';
     placeholder.style.display = 'flex';
     artWrap.classList.remove('playing');
@@ -169,8 +173,8 @@ function updateNowPlaying(np) {
     totTime.textContent     = '0:00';
     viz.classList.remove('active');
     // Bottom bar
-    $('bbTitle').textContent = window.tr ? window.tr('npTitle', locale) : 'Nothing Playing';
-    $('bbArtist').textContent = window.tr ? window.tr('npArtist', locale) : 'Queue is empty';
+    $('bbTitle').textContent = 'Nothing Playing';
+    $('bbArtist').textContent = 'Queue is empty';
     $('bbArtImg').style.display = 'none';
     $('bbArtPlaceholder').style.display = 'flex';
     $('bbCurTime').textContent = '0:00';
@@ -181,18 +185,8 @@ function updateNowPlaying(np) {
   }
   // Update Recently Played History
   updateRecentlyPlayed(np);
-  
-  // TADC Easter Egg
-  if (np && np.title && np.title !== lastTadcTrack) {
-    lastTadcTrack = np.title;
-    const t = (np.title || '').toLowerCase();
-    if (t.includes('tadc') || t.includes('the amazing digital circus')) {
-      showToast('Enjoy TADC? Try another website by the owner! <a href="https://wackytadc.github.io" target="_blank" style="color: #8b5cf6; text-decoration: underline;">https://wackytadc.github.io</a> to watch TADC with Areas that have OneDrive and github.io Websites unblocked!', 'info', true);
-    }
-  }
-
   title.textContent  = np.title || 'Unknown Track';
-  artist.textContent = 'DLM BlueSteel Player';
+  artist.textContent = np.artist || np.author || 'Unknown Artist';
   if (np.thumbnail) {
     artImg.src                  = np.thumbnail;
     artImg.style.display        = 'block';
@@ -206,19 +200,21 @@ function updateNowPlaying(np) {
   }
   artWrap.classList.toggle('playing', !np.paused);
   viz.classList.toggle('active', !np.paused);
-  const durationSecs = parseDurationSecs(np.duration);
-  const pos = Number(np.position) || 0;
+  
+  const speed = parseFloat($('bbSpeedSlider') ? $('bbSpeedSlider').value : 1.0) || 1.0;
+  const durationSecs = parseDurationSecs(np.duration) / speed;
+  const pos = (Number(np.position) || 0) / speed;
   const pct = durationSecs > 0 ? Math.min(100, (pos / durationSecs) * 100) : 0;
   fill.style.width    = pct.toFixed(1) + '%';
   curTime.textContent = formatTime(pos);
-  totTime.textContent = np.duration || '0:00';
+  totTime.textContent = formatTime(durationSecs);
   const iconPlay  = $('iconPlay');
   const iconPause = $('iconPause');
   iconPlay.style.display  = np.paused ? '' : 'none';
   iconPause.style.display = np.paused ? 'none' : '';
   // Bottom Bar Updates
   $('bbTitle').textContent = np.title || 'Unknown Track';
-  $('bbArtist').textContent = 'DLM BlueSteel Player';
+  $('bbArtist').textContent = np.artist || np.author || 'Unknown Artist';
   if (np.thumbnail) {
     $('bbArtImg').src = np.thumbnail;
     $('bbArtImg').style.display = 'block';
@@ -228,7 +224,7 @@ function updateNowPlaying(np) {
     $('bbArtPlaceholder').style.display = 'flex';
   }
   $('bbCurTime').textContent = formatTime(pos);
-  $('bbTotTime').textContent = np.duration || '0:00';
+  $('bbTotTime').textContent = formatTime(durationSecs);
   $('bbProgressFill').style.width = pct.toFixed(1) + '%';
   $('bbIconPlay').style.display = np.paused ? '' : 'none';
   $('bbIconPause').style.display = np.paused ? 'none' : '';
@@ -239,17 +235,6 @@ function updateNowPlaying(np) {
     else isMuted = true;
     updateVolumeUI();
   }
-  
-  // Sync speed and pitch if available and not being dragged
-  if (typeof np.speed === 'number' && document.activeElement !== $('bbSpeedSlider')) {
-    $('bbSpeedSlider').value = np.speed;
-    $('bbSpeedVal').textContent = np.speed.toFixed(2) + 'x';
-  }
-  if (typeof np.pitch === 'number' && document.activeElement !== $('bbPitchSlider')) {
-    $('bbPitchSlider').value = np.pitch;
-    $('bbPitchVal').textContent = np.pitch.toFixed(2) + 'x';
-  }
-  
   refreshButtonStates();
 }
 // ─── Recently Played ─────────────────────────────
@@ -304,6 +289,7 @@ function renderRecentlyPlayed() {
       : `<div class="placeholder-art"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>`;
     return `
       <div class="recent-card" data-index="${i}">
+        <button class="remove-recent-btn" data-index="${i}" title="Remove from history">&times;</button>
         <div class="recent-art">
           ${art}
           <div class="recent-play-hover">
@@ -319,7 +305,15 @@ function renderRecentlyPlayed() {
   }).join('');
   // Wire click to add song to queue
   container.querySelectorAll('.recent-card').forEach(card => {
-    card.addEventListener('click', () => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.remove-recent-btn')) {
+        e.stopPropagation();
+        const idx = parseInt(e.target.closest('.remove-recent-btn').dataset.index, 10);
+        recentlyPlayed.splice(idx, 1);
+        localStorage.setItem('dlm_recently_played', JSON.stringify(recentlyPlayed));
+        renderRecentlyPlayed();
+        return;
+      }
       const idx = parseInt(card.dataset.index, 10);
       const track = recentlyPlayed[idx];
       if (track) {
@@ -339,24 +333,21 @@ function renderFavorites() {
   const container = $('favoritesContainer');
   if (!container) return;
   if (!favorites.length) {
-    container.innerHTML = `<div class="empty-state-small">${window.tr ? window.tr('emptyFav', window.dlm_current_locale || 'british') : 'Use the heart in the player bar to save a favorite'}</div>`;
+    container.innerHTML = '<div class="empty-state-small">Use the heart in the player bar to save a favorite</div>';
     return;
   }
   container.innerHTML = favorites.map((track, i) => `
-    <div class="recent-card" data-index="${i}" style="position: relative;">
+    <div class="recent-card" data-index="${i}">
+      <button class="remove-recent-btn fav-remove" data-index="${i}" title="Remove from favorites">&times;</button>
       <div class="recent-art">${track.thumbnail ? `<img src="${esc(track.thumbnail)}" alt="" />` : ''}<div class="recent-play-hover">▶</div></div>
-      <div class="recent-info">
-        <div class="recent-title">${esc(track.title || 'Unknown')}</div>
-      </div>
-      <button class="remove-fav-btn" data-index="${i}" title="${esc(window.tr ? window.tr('titleRemoveFav', window.dlm_current_locale || 'british') : 'Remove from favorites')}" style="position: absolute; right: 8px; top: 8px; background:rgba(0,0,0,0.6); border:none; color:white; cursor:pointer; font-size:14px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; z-index: 10; border-radius: 50%; transition: all 0.2s; backdrop-filter: blur(4px);" onmouseover="this.style.background='#ef4444'" onmouseout="this.style.background='rgba(0,0,0,0.6)'">✕</button>
+      <div class="recent-info"><div class="recent-title">${esc(track.title || 'Unknown')}</div></div>
     </div>`).join('');
   container.querySelectorAll('.recent-card').forEach(card => card.addEventListener('click', (e) => {
-    if (e.target.closest('.remove-fav-btn')) {
+    if (e.target.closest('.fav-remove')) {
       e.stopPropagation();
-      const idx = Number(e.target.closest('.remove-fav-btn').dataset.index);
+      const idx = Number(e.target.closest('.fav-remove').dataset.index);
       favorites.splice(idx, 1);
       localStorage.setItem('dlm_favorites', JSON.stringify(favorites));
-      showToast(window.tr ? window.tr('msgRemovedFromFav', window.dlm_current_locale || 'british') : 'Removed from favorites', 'info');
       renderFavorites();
       updateFavoriteButton();
       return;
@@ -371,10 +362,10 @@ function toggleFavorite() {
   const index = favorites.findIndex(f => f.url && f.url === track.url);
   if (index >= 0) {
     favorites.splice(index, 1);
-    showToast(window.tr ? window.tr('msgRemovedFromFav', window.dlm_current_locale || 'british') : 'Removed from favorites', 'info');
+    showToast('Removed from favorites', 'info');
   } else {
     favorites.unshift(track);
-    showToast(window.tr ? window.tr('msgAddedToFav', window.dlm_current_locale || 'british') : 'Added to favorites', 'success');
+    showToast('Added to favorites', 'success');
   }
   localStorage.setItem('dlm_favorites', JSON.stringify(favorites));
   renderFavorites();
@@ -408,16 +399,16 @@ function refreshButtonStates() {
 function renderQueue() {
   const list  = $('queueList');
   const count = $('queueCount');
+  
   count.textContent = `${queueData.length} track${queueData.length !== 1 ? 's' : ''} in queue`;
   if (queueData.length === 0) {
     list.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
-        <p>${window.tr ? window.tr('queueEmpty', window.dlm_current_locale || 'british') : 'Queue is empty'}</p>
-        <span>${window.tr ? window.tr('lblQueueHint', window.dlm_current_locale || 'british') : 'add songs using Quick Play or the add songs tab'}</span>
+        <p>Queue is empty</p>
+        <span>Add songs using Quick Play or the Add Songs tab</span>
       </div>`;
-    return;
-  }
+  } else {
   list.innerHTML = queueData.map((track, i) => `
     <div class="queue-item" data-index="${i}" draggable="true">
       <span class="queue-drag-handle" title="Drag to reorder">☰</span>
@@ -466,18 +457,19 @@ function renderQueue() {
         const moved = queueData.splice(dragIndex, 1)[0];
         queueData.splice(to, 0, moved);
         renderQueue();
-      } catch (err) { showToast(`${tr('errMoveTrack', window.dlm_current_locale || 'british')}: ` + err.message, 'error'); pollQueue(); }
+      } catch (err) { showToast('Could not move track: ' + err.message, 'error'); pollQueue(); }
     });
   });
+  }
   // Also render for the small quick queue list (top 5 only)
   const smallList = $('quickQueueList');
   const queueBadge = $('queueBadge');
-  if (queueBadge) queueBadge.textContent = `${queueData.length} ${tr('lblTracks', window.dlm_current_locale || 'british')}`;
+  if (queueBadge) queueBadge.textContent = `${queueData.length} track${queueData.length !== 1 ? 's' : ''}`;
   if (smallList) {
     if (queueData.length === 0) {
-      smallList.innerHTML = `<div class="empty-state-small">${tr('msgNothingInQueue', window.dlm_current_locale || 'british')}</div>`;
+      smallList.innerHTML = `<div class="empty-state-small">Nothing in the queue</div>`;
     } else {
-      const top5 = queueData.slice(0, 5);
+      const top5 = queueData.slice(0, 3);
       smallList.innerHTML = top5.map((track, i) => `
         <div class="queue-item-small" data-index="${i}">
           <div class="queue-thumb-small">
@@ -489,7 +481,7 @@ function renderQueue() {
             <div class="queue-title-small">${esc(track.title || 'Unknown')}</div>
             <div class="queue-duration-small">${esc(track.duration || '')}</div>
           </div>
-          <button class="queue-remove-small" data-index="${i}" title="${tr('tipRemove', window.dlm_current_locale || 'british')}">
+          <button class="queue-remove-small" data-index="${i}" title="Remove">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
@@ -523,11 +515,11 @@ async function handlePlayPause() {
     if (nowPlayingData.paused) {
       iPlay.style.display = ''; iPause.style.display = 'none';
       viz.classList.remove('active'); art.classList.remove('playing');
-      showToast(tr('msgPaused', window.dlm_current_locale || 'british') + ' ⏸', 'info');
+      showToast('Paused ⏸', 'info');
     } else {
       iPlay.style.display = 'none'; iPause.style.display = '';
       viz.classList.add('active'); art.classList.add('playing');
-      showToast(tr('msgPlaying', window.dlm_current_locale || 'british') + ' ▶', 'info');
+      showToast('Playing ▶', 'info');
     }
     
     // Optimistic update for bottom bar
@@ -542,7 +534,7 @@ async function handlePlayPause() {
     }
     
   } catch (err) {
-    showToast(`${tr('msgActionFailed', window.dlm_current_locale || 'british')}: ${err.message}`, 'error');
+    showToast(`Action failed: ${err.message}`, 'error');
   } finally {
     $('btnPlayPause').disabled = false;
   }
@@ -553,10 +545,10 @@ async function handleSkip() {
   $('btnSkip').disabled = true;
   try {
     await apiFetch('/api/queue/skip', { method: 'POST', body: JSON.stringify({ guildId: selectedGuildId }) });
-    showToast(tr('msgSkipped', window.dlm_current_locale || 'british') + ' ⏭', 'success');
+    showToast('Skipped ⏭', 'success');
     setTimeout(() => { pollNowPlaying(); pollQueue(); }, 500);
   } catch (err) {
-    showToast(tr('msgSkipFailed', window.dlm_current_locale || 'british') + ': ' + err.message, 'error');
+    showToast('Skip failed: ' + err.message, 'error');
   } finally {
     setTimeout(() => { $('btnSkip').disabled = !nowPlayingData || !selectedGuildId; }, 800);
   }
@@ -566,13 +558,13 @@ async function handleStop() {
   $('btnStop').disabled = true;
   try {
     await apiFetch('/api/queue/stop', { method: 'POST', body: JSON.stringify({ guildId: selectedGuildId }) });
-    showToast(tr('msgStopped', window.dlm_current_locale || 'british') + ' ⏹', 'info');
+    showToast('Stopped ⏹', 'info');
     nowPlayingData = null;
     queueData = [];
     updateNowPlaying(null);
     renderQueue();
   } catch (err) {
-    showToast(tr('msgStopFailed', window.dlm_current_locale || 'british') + ': ' + err.message, 'error');
+    showToast('Stop failed: ' + err.message, 'error');
   } finally {
     $('btnStop').disabled = true; // stays disabled until something plays
   }
@@ -582,11 +574,11 @@ async function handleClearQueue() {
   $('clearQueueBtn').disabled = true;
   try {
     await apiFetch('/api/queue/clear', { method: 'POST', body: JSON.stringify({ guildId: selectedGuildId }) });
-    showToast(tr('msgQueueCleared', window.dlm_current_locale || 'british') + ' 🗑️', 'info');
+    showToast('Queue cleared 🗑️', 'info');
     queueData = [];
     renderQueue();
   } catch (err) {
-    showToast(tr('msgClearFailed', window.dlm_current_locale || 'british') + ': ' + err.message, 'error');
+    showToast('Clear failed: ' + err.message, 'error');
   } finally {
     $('clearQueueBtn').disabled = false;
   }
@@ -595,10 +587,10 @@ async function handleShuffle() {
   if (!selectedGuildId) return;
   try {
     const data = await apiFetch(`/api/queue/shuffle?guildId=${selectedGuildId}`, { method: 'POST' });
-    showToast(`${tr('msgShuffled', window.dlm_current_locale || 'british')} ${data.count || 0} ${tr('lblSongs', window.dlm_current_locale || 'british')} 🔀`, 'success');
+    showToast(`Shuffled ${data.count || 0} songs 🔀`, 'success');
     setTimeout(() => { pollNowPlaying(); pollQueue(); }, 500);
   } catch (err) {
-    showToast(tr('msgShuffleFailed', window.dlm_current_locale || 'british') + ': ' + err.message, 'error');
+    showToast('Shuffle failed: ' + err.message, 'error');
   }
 }
 async function removeFromQueue(index) {
@@ -607,29 +599,36 @@ async function removeFromQueue(index) {
     await apiFetch('/api/queue/remove', { method: 'POST', body: JSON.stringify({ guildId: selectedGuildId, index }) });
     queueData.splice(index, 1);
     renderQueue();
-    showToast(tr('msgRemovedFromQueue', window.dlm_current_locale || 'british'), 'info');
+    showToast('Removed from queue', 'info');
   } catch (err) {
-    showToast(tr('msgRemoveFailed', window.dlm_current_locale || 'british') + ': ' + err.message, 'error');
+    showToast('Remove failed: ' + err.message, 'error');
     setTimeout(pollQueue, 500);
   }
 }
 async function addSong(queryOrUrl, statusEl, inputEl, btnEl) {
-  if (!selectedGuildId) { showToast(tr('errNoServerSelected', window.dlm_current_locale || 'british'), 'error'); return false; }
+  if (!selectedGuildId) { showToast('No server selected', 'error'); return false; }
   if (!queryOrUrl || !queryOrUrl.trim()) return false;
+  
+  let finalQuery = queryOrUrl.trim();
+  // Force URLs through BlueSteelAI heuristic so iTunes metadata isn't lost
+  if (/^https?:\/\//i.test(finalQuery) && !finalQuery.startsWith('premiumsearch:')) {
+    finalQuery = 'premiumsearch:' + finalQuery;
+  }
+
   if (btnEl)    btnEl.disabled    = true;
-  if (statusEl) { statusEl.className = 'add-status loading'; statusEl.textContent = tr('lblAddingToQueue', window.dlm_current_locale || 'british') + '...'; }
+  if (statusEl) { statusEl.className = 'add-status loading'; statusEl.textContent = 'Adding to queue...'; }
   try {
     await apiFetch('/api/queue/add', {
       method: 'POST',
-      body: JSON.stringify({ guildId: selectedGuildId, query: queryOrUrl.trim() }),
+      body: JSON.stringify({ guildId: selectedGuildId, query: finalQuery }),
     });
     if (inputEl)  inputEl.value = '';
     if (statusEl) {
       statusEl.className   = 'add-status success';
-      statusEl.textContent = '✓ ' + tr('lblAddedToQueue', window.dlm_current_locale || 'british') + '!';
+      statusEl.textContent = '✓ Added to queue!';
       setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'add-status'; }, 3000);
     }
-    showToast(tr('msgAddedToQueue', window.dlm_current_locale || 'british') + ' 🎵', 'success');
+    showToast('Added to queue 🎵', 'success');
     setTimeout(pollQueue, 800);
     return true;
   } catch (err) {
@@ -641,11 +640,36 @@ async function addSong(queryOrUrl, statusEl, inputEl, btnEl) {
   }
 }
 // ─── YouTube Search ──────────────────────────────
-function isUrl(str) {
+  function triggerTadcEasterEgg() {
+    // We create a custom toast so we can easily inject Kinger inside it
+    const container = $('toastContainer');
+    if (!container) return;
+    
+    const toast = document.createElement('div');
+    toast.className = 'toast success';
+    toast.style.position = 'relative'; 
+    toast.style.overflow = 'visible'; 
+    toast.innerHTML = `<span class="toast-dot"></span><span style="z-index: 2; position: relative;">Watch TADC anywhere! Visit: <a href="https://wackytadc.github.io" target="_blank" style="color: var(--accent-1); text-decoration: underline; font-weight: bold;">wackytadc.github.io</a></span>`;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+      toast.classList.add('removing');
+      toast.addEventListener('animationend', () => toast.remove(), { once: true });
+    }, 6000);
+  }
+
+  function isUrl(str) {
   return str.startsWith('http://') || str.startsWith('https://');
 }
-async function doSearch(query) {
-  const resultsEl   = $('searchResults');
+async function doSearch(query, pure = false) {
+    if (query) {
+      const qLower = query.trim().toLowerCase();
+      if (qLower === 'tadc' || qLower === 'the amazing digital circus') {
+        triggerTadcEasterEgg();
+      }
+    }
+    const resultsEl   = $('searchResults');
   const spinner     = $('searchSpinner');
   const directRow   = $('directAddRow');
   const status      = $('addStatus');
@@ -664,7 +688,7 @@ async function doSearch(query) {
   selectedSearchResult      = null;
   try {
     const results = await apiFetch(
-      `/api/search?q=${encodeURIComponent(query)}&guildId=${selectedGuildId || ''}`
+      `/api/search?q=${encodeURIComponent(query)}&guildId=${selectedGuildId || ''}&pure=${pure}`
     );
     spinner.classList.remove('spinning');
     if (!results || results.length === 0) {
@@ -672,8 +696,28 @@ async function doSearch(query) {
       resultsEl.innerHTML     = `<div class="search-no-results">No results found for "${esc(query)}"</div>`;
       return;
     }
+    
+    let finalResults = results;
+    // With the new Wikipedia AI, the backend explicitly tells us if it's a song!
+    const isSongSearch = results.some(r => r.isSong === true);
+    
+    if (isSongSearch) {
+      // It's a song! Attempt an Exact Match on the Title
+      let bestMatch = results.find(r => r.title.toLowerCase() === query.toLowerCase());
+      if (!bestMatch) {
+        // Fallback to the first track that successfully got iTunes metadata
+        bestMatch = results.find(r => r.thumbnail && r.thumbnail.includes('mzstatic')) || results[0];
+      }
+      // Put the best match at the top, but still show up to 4 alternatives in case YouTube/Heuristics picked a mashup
+      finalResults = [bestMatch, ...results.filter(r => r !== bestMatch)].slice(0, 5);
+    } else {
+      // Other media -> 5 media types
+      finalResults = results.slice(0, 5);
+    }
+
     resultsEl.style.display = 'block';
-    resultsEl.innerHTML     = results.map((r, i) => `
+    
+    const renderItem = (r, i) => `
       <div class="search-result-item" data-index="${i}" data-url="${esc(r.url)}" data-title="${esc(r.title)}">
         <div class="sr-thumb">
           ${r.thumbnail
@@ -688,7 +732,51 @@ async function doSearch(query) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
       </div>
-    `).join('');
+    `;
+
+    let html = '';
+    if (isSongSearch && finalResults.length > 1) {
+      html += renderItem(finalResults[0], 0);
+      html += `
+        <div style="margin-top: 10px; margin-bottom: 10px; text-align: center;">
+          <button class="ghost-btn" id="showAltBtn" style="width: 100%;">Wrong Song? Show Alternatives</button>
+        </div>
+        <div id="altResultsContainer" style="display: none;">
+          ${finalResults.slice(1).map((r, i) => renderItem(r, i + 1)).join('')}
+        </div>
+      `;
+    } else {
+      html += finalResults.map((r, i) => renderItem(r, i)).join('');
+    }
+    
+    if (!pure) {
+      html += `
+      <div style="margin-top: 15px; text-align: center;">
+        <button class="ghost-btn" id="pureSearchBtn" style="width: 100%;">Looking for other media?</button>
+      </div>`;
+    }
+    resultsEl.innerHTML = html;
+    
+    if (isSongSearch && finalResults.length > 1) {
+      const showAltBtn = resultsEl.querySelector('#showAltBtn');
+      const altContainer = resultsEl.querySelector('#altResultsContainer');
+      if (showAltBtn && altContainer) {
+        showAltBtn.addEventListener('click', () => {
+          altContainer.style.display = 'block';
+          showAltBtn.style.display = 'none';
+        });
+      }
+    }
+
+    if (!pure) {
+      const pureBtn = resultsEl.querySelector('#pureSearchBtn');
+      if (pureBtn) {
+        pureBtn.addEventListener('click', () => {
+           doSearch(query, true);
+        });
+      }
+    }
+
     // Wire up result items
     resultsEl.querySelectorAll('.search-result-item').forEach(item => {
       // Click row → select it
@@ -722,9 +810,9 @@ async function doSearch(query) {
   }
 }
 // ─── PIN Lock ───────────────────────────────────
-const PIN_CORRECT    = '1973';
-const PIN_MGMT       = '120195';
-const PIN_PUZZLE_ANS = 'A1B2C3';
+const PIN_CORRECT    = 'MTk3Mw==';
+const PIN_MGMT       = 'MTIwMTk1';
+const PIN_PUZZLE_ANS = 'QTFCMkMz';
 const ROBOT_MS       = 80;   // keystroke gap below this = suspicious
 let pinUnlocked     = false;   // stays true until page reload
 let pinBuf          = '';      // current digits entered
@@ -759,7 +847,7 @@ function closePinOverlay() {
   const activeNav = document.querySelector('.nav-item.active');
   const currentView = activeNav ? activeNav.dataset.view : 'player';
 
-  if (bb && (currentView === 'player' || currentView === 'favorites') && !isClassic) {
+  if (bb && currentView === 'player' && !isClassic) {
     bb.style.display = 'flex';
   }
 }
@@ -814,8 +902,8 @@ function pressDigit(d) {
   if (pinBuf.length >= 4) return;
   const now = Date.now();
   pinKeytimes.push(now);
-  // Robot check after 2+ presses
-  if (pinKeytimes.length >= 2 && isRoboticInput()) {
+  // Robot check after 2+ presses (allow fast 8008 typing)
+  if (pinKeytimes.length >= 2 && isRoboticInput() && !'8008'.startsWith(pinBuf + d)) {
     pinBuf = '';
     showPinState('mgmt');
     return;
@@ -828,7 +916,17 @@ function pressDigit(d) {
 }
 
 function checkPin() {
-  if (pinBuf === PIN_CORRECT) {
+  if (pinBuf === '8008' && localStorage.getItem('dlm_image_blobs_enabled') === 'true') {
+    localStorage.removeItem('dlm_image_blobs_enabled');
+    closePinOverlay();
+    pinBuf = '';
+    pinKeytimes = [];
+    showToast('Easter Egg Deactivated. Reloading...', 'info');
+    setTimeout(() => window.location.reload(), 500);
+    return;
+  }
+
+  if (btoa(pinBuf) === PIN_CORRECT) {
     // Correct!
     pinUnlocked = true;
     closePinOverlay();
@@ -871,34 +969,53 @@ function setView(name) {
     requestAnimationFrame(() => requestAnimationFrame(() => view.classList.add('active')));
   }
   if (navBtn) navBtn.classList.add('active');
-  const locale = window.dlm_current_locale || localStorage.getItem('dlm_locale') || 'british';
-  const titles = { 
-    player: tr('navPlayer', locale), 
-    queue: tr('navQueue', locale), 
-    search: tr('navAdd', locale), 
-    favorites: tr('navFav', locale), 
-    'user-settings': tr('navSet', locale), 
-    settings: tr('pinTitle', locale) 
-  };
+  const titles = { player: 'Player', queue: 'Queue', search: 'Add Songs', favorites: localStorage.getItem('dlm_locale') === 'american' ? 'Favorites' : 'Favourites', 'user-settings': 'User Settings', settings: 'Settings' };
   $('pageTitle').textContent = titles[name] || name;
   // Toggle Bottom Player Bar visibility (only on player view when not classic)
-  const bb = document.querySelector('.bottom-player-bar');
-  if (bb) {
-    const isClassic = document.body.classList.contains('classic-ui');
-    bb.style.display = ((name === 'player' || name === 'favorites') && !isClassic) ? 'flex' : 'none';
-  }
+    const bb = document.querySelector('.bottom-player-bar');
+    if (bb) {
+      const isClassic = document.body.classList.contains('classic-ui');
+      if (isClassic) {
+        bb.style.display = 'none';
+      } else {
+        if (name === 'player') {
+          bb.classList.remove('bb-exit-anim');
+          if (bb.style.display === 'none' || !bb.classList.contains('bb-enter-anim')) {
+             bb.classList.add('bb-enter-anim');
+          }
+          bb.style.display = 'flex';
+        } else if (name === 'settings') {
+          bb.classList.remove('bb-exit-anim');
+          bb.classList.remove('bb-enter-anim');
+          bb.style.display = 'none';
+        } else {
+          if (bb.style.display === 'flex' && !bb.classList.contains('bb-exit-anim')) {
+            bb.classList.remove('bb-enter-anim');
+            bb.classList.add('bb-exit-anim');
+            setTimeout(() => {
+              const active = document.querySelector('.nav-item.active');
+              if (active && active.dataset.view !== 'player') {
+                bb.style.display = 'none';
+              }
+            }, 400);
+          } else if (bb.style.display !== 'flex') {
+            bb.style.display = 'none';
+          }
+        }
+      }
+    }
 }
 // ─── Toast ──────────────────────────────────────
-function showToast(message, type = 'info', allowHtml = false) {
+function showToast(message, type = 'info') {
   const container = $('toastContainer');
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  toast.innerHTML = `<span class="toast-dot"></span><span>${allowHtml ? message : esc(message)}</span>`;
+  toast.innerHTML = `<span class="toast-dot"></span><span>${esc(message)}</span>`;
   container.appendChild(toast);
   setTimeout(() => {
     toast.classList.add('removing');
     toast.addEventListener('animationend', () => toast.remove(), { once: true });
-  }, allowHtml ? 10000 : 3500);
+  }, 3500);
 }
 // ─── Utils ──────────────────────────────────────
 function esc(str) {
@@ -916,8 +1033,50 @@ function parseDurationSecs(str) {
   if (parts.length === 2) return parts[0]*60 + parts[1];
   return 0;
 }
-// ─── Init ───────────────────────────────────────
+
+// Init
 document.addEventListener('DOMContentLoaded', () => {
+  // Update Log Modal v2.2
+  const updateLogSeen = localStorage.getItem('v2.2_update_seen');
+  const updateLogModal = $('updateLogModal');
+  const closeUpdateModalBtn = $('closeUpdateModalBtn');
+  const playCelebrationBtn = $('playCelebrationBtn');
+  
+  if (!updateLogSeen && updateLogModal) {
+    updateLogModal.style.display = 'flex';
+    localStorage.setItem('v2.2_update_seen', 'true');
+  }
+  
+  if (closeUpdateModalBtn) {
+    closeUpdateModalBtn.addEventListener('click', () => {
+      updateLogModal.style.display = 'none';
+    });
+  }
+  
+  if (playCelebrationBtn) {
+    playCelebrationBtn.addEventListener('click', async () => {
+      updateLogModal.style.display = 'none';
+      if (!selectedGuildId) {
+        showToast('Please select a server first to play the celebration song!', 'error');
+        return;
+      }
+      try {
+        await addSong('premiumsearch:Celebration LE SSERAFIM', null, null, null);
+        showToast('CELEBRATION by LE SSERAFIM added to queue! ?', 'success');
+      } catch (err) {
+        showToast('Failed to add Celebration: ' + err.message, 'error');
+      }
+    });
+  }
+
+  const regenUpdateLogBtn = $('regenUpdateLogBtn');
+  if (regenUpdateLogBtn) {
+    regenUpdateLogBtn.addEventListener('click', () => {
+      localStorage.removeItem('v2.2_update_seen');
+      location.reload();
+    });
+  }
+
   $('apiUrlInput').value = API_BASE_URL;
   // Navigation — intercept Settings with PIN lock
   document.querySelectorAll('.nav-item').forEach(btn => {
@@ -968,7 +1127,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Management PIN
   $('mgmtSubmit').addEventListener('click', () => {
     const val = $('mgmtInput').value.trim();
-    if (val === PIN_MGMT) {
+    if (btoa(val) === PIN_MGMT) {
       pinAttempts = 0; pinBuf = ''; pinKeytimes = [];
       showPinState('pin');
       updateDots();
@@ -980,10 +1139,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   $('mgmtInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('mgmtSubmit').click(); });
-  // Puzzle verify
+  // Puzzle PIN
   $('puzzleSubmit').addEventListener('click', () => {
-    const val = $('puzzleInput').value.trim();
-    if (val === PIN_PUZZLE_ANS) {
+    const val = $('puzzleInput').value.trim().toUpperCase();
+    if (btoa(val) === PIN_PUZZLE_ANS) {
       pinAttempts = 0; pinBuf = ''; pinKeytimes = [];
       showPinState('pin');
       updateDots();
@@ -1009,6 +1168,35 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btnStop').addEventListener('click', handleStop);
   $('clearQueueBtn').addEventListener('click', handleClearQueue);
   $('shuffleQueueBtn').addEventListener('click', handleShuffle);
+
+  // Timeline Seeking
+  const handleSeek = async (e) => {
+    if (!selectedGuildId || !nowPlayingData) return;
+    const bar = e.currentTarget;
+    const clickX = e.clientX - bar.getBoundingClientRect().left;
+    const pct = Math.max(0, Math.min(1, clickX / bar.offsetWidth));
+    
+    const durationSecs = parseDurationSecs(nowPlayingData.duration);
+    if (durationSecs > 0) {
+      const positionMs = Math.floor(pct * durationSecs * 1000);
+      try {
+        await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/queue/seek`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+          body: JSON.stringify({ guildId: selectedGuildId, positionMs })
+        });
+        nowPlayingData.position = positionMs / 1000;
+        updateNowPlaying(nowPlayingData);
+      } catch (err) {
+        console.error('Seek failed:', err);
+      }
+    }
+  };
+  
+  document.querySelectorAll('.progress-bar').forEach(bar => {
+    bar.style.cursor = 'pointer';
+    bar.addEventListener('click', handleSeek);
+  });
   // Quick Play (Player tab)
   $('quickPlayForm').addEventListener('submit', async e => {
     e.preventDefault();
@@ -1053,318 +1241,141 @@ document.addEventListener('DOMContentLoaded', () => {
     effectsBtn.addEventListener('click', e => { e.stopPropagation(); effectsPanel.classList.toggle('open'); });
     document.addEventListener('click', e => { if (!effectsPanel.contains(e.target) && e.target !== effectsBtn) effectsPanel.classList.remove('open'); });
   }
-  // Local language preference
+  // Local language preference: British spelling is the default.
   const localeSelect = $('localeSelect');
-  
-  const I18N = {
-    british: {
-      navPlayer: 'Player', navQueue: 'Queue', navAdd: 'Add Songs', navFav: 'Favourites', navSet: 'User Settings',
-      titleQueue: 'Up Next', titleAdd: 'Add to Queue', titleFav: 'Favourites', titleSet: 'User Settings',
-      queueEmpty: 'Nothing in the queue', searchPlaceholder: 'Search YouTube or paste a URL / playlist...',
-      langTitle: 'Language', langDesc: 'British English is the default for this browser.',
-      bgTitle: 'Background', bgDesc: 'Upload a custom wallpaper (25MB limit).',
-      accentTitle: 'Accent Gradient', accentDesc: 'Choose any two colours for your local gradient.',
-      statusConn: 'Connected', statusDisco: 'Disconnected',
-      npTitle: 'Nothing Playing', npArtist: 'Queue is empty',
-      btnOldUi: 'Switch to Old UI', lblServer: 'Server', lblMusicPlayer: 'Music Player',
-      btnChooseBg: 'Choose Background', btnResetBg: 'Reset to Default Background',
-      lblStart: 'Start ', lblEnd: 'End ', btnResetAcc: 'Reset to Default Accent',
-      lblSpeed: 'Speed', lblPitch: 'Pitch',
-      lblRecent: 'Recently played', lblQuickQueue: 'Quick Queue ', btnAddSong: 'Add song',
-      lblTracks: 'tracks', lblTracksInQueue: 'tracks in queue',
-      topSearchPlaceholder: 'Search songs, artists, albums...',
-      btnShuffle: 'Shuffle', btnClearAll: 'Clear All', lblQueueHint: 'Add Songs using the Quick Play or Add Songs tabs',
-      lblSearchHint: 'Search YouTube — pick a result and hit + to add', btnUploadMp3: 'Upload MP3',
-      btnClearRecent: 'Clear Recently Played', descClearRecent: 'Wipe all tracks currently stored in your recently played dashboard history.',
-      tabClearHistory: 'Clear History',
-      pinTitle: 'Settings Locked', pinDesc: 'Enter your PIN to access Settings', btnCancel: 'Cancel',
-      tabAnnounce: 'Announcements', descAnnounce: 'Send an announcement to the selected server. Choose a preset or write your own message.',
-      phAnnounce: 'Announcement message...', btnSendAnnounce: 'Send announcement',
-      tabMaint: 'Maintenance mode', descMaint: 'Stops all music, clears queues, notifies servers, and disconnects the bot until switched off.',
-      btnEnableMaint: 'Enable maintenance', btnDisableMaint: 'Disable maintenance', lblMaintOff: 'Maintenance is off.', lblMaintOn: 'Maintenance is on.',
-      tabApi: 'Bot API URL', descApi: 'The URL where your DLM BlueSteel Player bot is running its HTTP server.',
-      btnSaveLocal: 'Save (Local)', btnTestConn: 'Test Connection', btnChangeGlobal: 'Change Global URL (Exec)',
-      tabSecurity: 'Security Note', descSecurity: 'Your dashboard communicates directly with your local bot server. Never share your API URL publicly — use ngrok or a VPN for remote access.',
-      tabAbout: 'About',
-      lblUnlocked: 'Settings unlocked \u2713',
-      msgNothingInQueue: 'Nothing in the queue', msgPaused: 'Paused', msgPlaying: 'Playing', msgActionFailed: 'Action Failed',
-      msgSkipped: 'Skipped', msgSkipFailed: 'Skip failed', msgStopped: 'Stopped', msgStopFailed: 'Stop failed',
-      msgQueueCleared: 'Queue Cleared', msgClearFailed: 'Clear failed', msgShuffled: 'Shuffled', lblSongs: 'songs',
-      msgShuffleFailed: 'Shuffle failed', msgRemovedFromQueue: 'Removed from queue', msgRemoveFailed: 'Remove failed',
-      errNoServerSelected: 'Select a server first!', msgAddedToQueue: 'Added to queue', errMoveTrack: 'Failed to move track',
-      lblAddedToQueue: 'Added', descFav: 'Saved songs are stored in this browser.', emptyFav: 'Use the heart in the player bar to save a favorite',
-      titleRemoveFav: 'Remove from favorites', msgRemovedFromFav: 'Removed from favorites', msgAddedToFav: 'Added to favorites'
-    },
-    american: {
-      navFav: 'Favorites', titleFav: 'Favorites',
-      langDesc: 'American English selected.', accentDesc: 'Choose any two colors for your local gradient.'
-    },
-    polish: {
-      navPlayer: 'Odtwarzacz', navQueue: 'Kolejka', navAdd: 'Dodaj Utwory', navFav: 'Ulubione', navSet: 'Ustawienia Użytkownika',
-      titleQueue: 'Następnie', titleAdd: 'Dodaj do Kolejki', titleFav: 'Ulubione', titleSet: 'Ustawienia Użytkownika',
-      queueEmpty: 'Nic w kolejce', searchPlaceholder: 'Szukaj w YouTube lub wpisz URL / playlistę...',
-      langTitle: 'Język', langDesc: 'Wybierz preferowany język.',
-      bgTitle: 'Tło', bgDesc: 'Prześlij własną tapetę (limit 25MB).',
-      accentTitle: 'Akcent (Gradient)', accentDesc: 'Wybierz dowolne dwa kolory dla lokalnego gradientu.',
-      statusConn: 'Po\u0142\u0105czono', statusDisco: 'Roz\u0142\u0105czono',
-      npTitle: 'Nic nie jest odtwarzane', npArtist: 'Kolejka jest pusta',
-      btnOldUi: 'Zmień na Stare UI', lblServer: 'Serwer', lblMusicPlayer: 'Odtwarzacz',
-      btnChooseBg: 'Wybierz Tło', btnResetBg: 'Zresetuj Tło',
-      lblStart: 'Początek ', lblEnd: 'Koniec ', btnResetAcc: 'Zresetuj Akcent',
-      lblSpeed: 'Szybkość', lblPitch: 'Wysokość',
-      lblRecent: 'Ostatnio odtwarzane', lblQuickQueue: 'Szybka Kolejka ', btnAddSong: 'Dodaj utwór',
-      lblTracks: 'utworów', lblTracksInQueue: 'utworów w kolejce',
-      topSearchPlaceholder: 'Szukaj piosenek, artystów, albumów...',
-      btnShuffle: 'Tasuj', btnClearAll: 'Wyczyść Wszystko', lblQueueHint: 'Dodaj utwory używając Szybkiego Odtwarzania lub zakładki Dodaj Utwory',
-      lblSearchHint: 'Szukaj w YouTube — wybierz wynik i kliknij + aby dodać', btnUploadMp3: 'Wgraj MP3',
-      btnClearRecent: 'Wyczyść Historię', descClearRecent: 'Usuń wszystkie utwory obecnie zapisane w historii ostatnio odtwarzanych na panelu.',
-      tabClearHistory: 'Wyczyść Historię',
-      pinTitle: 'Ustawienia Zablokowane', pinDesc: 'Wprowadź kod PIN, aby uzyskać dostęp do Ustawień', btnCancel: 'Anuluj',
-      tabAnnounce: 'Ogłoszenia', descAnnounce: 'Wyślij ogłoszenie na wybrany serwer. Wybierz z szablonu lub napisz własną wiadomość.',
-      phAnnounce: 'Wiadomość ogłoszenia...', btnSendAnnounce: 'Wyślij ogłoszenie',
-      tabMaint: 'Tryb Konserwacji', descMaint: 'Zatrzymuje muzykę, czyści kolejki, powiadamia serwery i rozłącza bota, dopóki nie zostanie wyłączony.',
-      btnEnableMaint: 'Włącz konserwację', btnDisableMaint: 'Wyłącz konserwację', lblMaintOff: 'Konserwacja wyłączona.', lblMaintOn: 'Konserwacja włączona.',
-      tabApi: 'URL Bot API', descApi: 'Adres URL, pod którym działa serwer HTTP bota DLM BlueSteel Player.',
-      btnSaveLocal: 'Zapisz (Lokalnie)', btnTestConn: 'Testuj Połączenie', btnChangeGlobal: 'Zmień Globalny URL (Exec)',
-      tabSecurity: 'Informacja o Bezpieczeństwie', descSecurity: 'Twój panel komunikuje się bezpośrednio z lokalnym serwerem bota. Nigdy nie udostępniaj swojego adresu URL API publicznie — użyj ngrok lub VPN do zdalnego dostępu.',
-      tabAbout: 'O Aplikacji',
-      lblUnlocked: 'Ustawienia odblokowane \u2713',
-      msgNothingInQueue: 'Nic w kolejce', msgPaused: 'Wstrzymano', msgPlaying: 'Odtwarzanie', msgActionFailed: 'Akcja nie powiod\u0142a si\u0119',
-      msgSkipped: 'Pomini\u0119to', msgSkipFailed: 'Pomini\u0119cie nie powiod\u0142o si\u0119', msgStopped: 'Zatrzymano', msgStopFailed: 'Zatrzymanie nie powiod\u0142o si\u0119',
-      msgQueueCleared: 'Kolejka wyczyszczona', msgClearFailed: 'Wyczyszczenie nie powiod\u0142o si\u0119', msgShuffled: 'Potasowano', lblSongs: 'utwory',
-      msgShuffleFailed: 'Tasowanie nie powiod\u0142o si\u0119', msgRemovedFromQueue: 'Usuni\u0119to z kolejki', msgRemoveFailed: 'Usuni\u0119cie nie powiod\u0142o si\u0119',
-      errNoServerSelected: 'Najpierw wybierz serwer!', msgAddedToQueue: 'Dodano do kolejki', errMoveTrack: 'Nie uda\u0142o si\u0119 przenie\u015b\u0107 utworu',
-      lblAddedToQueue: 'Dodano', descFav: 'Zapisane utwory s\u0105 przechowywane w tej przegl\u0105darce.', emptyFav: 'U\u017cyj serduszka na pasku odtwarzacza, aby zapisa\u0107 w ulubionych',
-      titleRemoveFav: 'Usu\u0144 z ulubionych', msgRemovedFromFav: 'Usuni\u0119to z ulubionych', msgAddedToFav: 'Dodano do ulubionych'
-    }
-  };
-
-  window.I18N = I18N;
-
-  function tr(key, locale) {
-    return (I18N[locale] && I18N[locale][key]) ? I18N[locale][key] : I18N['british'][key];
-  }
-  window.tr = tr;
-
   function applyLocale(locale) {
-    if (!['british', 'american', 'polish'].includes(locale)) locale = 'british';
-    localStorage.setItem('dlm_locale', locale);
-    window.dlm_current_locale = locale;
-    document.documentElement.lang = locale === 'polish' ? 'pl' : (locale === 'american' ? 'en-US' : 'en-GB');
-    if (localeSelect) localeSelect.value = locale;
-
-    // Sidebar
-    if (document.querySelector('#nav-player span')) document.querySelector('#nav-player span').textContent = tr('navPlayer', locale);
-    if (document.querySelector('#nav-queue span')) document.querySelector('#nav-queue span').textContent = tr('navQueue', locale);
-    if (document.querySelector('#nav-search span')) document.querySelector('#nav-search span').textContent = tr('navAdd', locale);
-    if (document.querySelector('#nav-favorites span')) document.querySelector('#nav-favorites span').textContent = tr('navFav', locale);
-    if (document.querySelector('#nav-user-settings span')) document.querySelector('#nav-user-settings span').textContent = tr('navSet', locale);
-
-    // View Titles
-    if (document.querySelector('#view-queue .section-title')) document.querySelector('#view-queue .section-title').textContent = tr('titleQueue', locale);
-    if (document.querySelector('#view-search .section-title')) document.querySelector('#view-search .section-title').textContent = tr('titleAdd', locale);
-    if (document.querySelector('#view-favorites .section-title')) document.querySelector('#view-favorites .section-title').textContent = tr('titleFav', locale);
-    if (document.querySelector('#view-favorites .section-sub')) document.querySelector('#view-favorites .section-sub').textContent = tr('descFav', locale);
-    if (document.querySelector('#view-user-settings .section-title')) document.querySelector('#view-user-settings .section-title').textContent = tr('titleSet', locale);
-
-    // Settings Text
-    document.querySelectorAll('#view-user-settings .settings-card').forEach(card => {
-      if (card.innerHTML.includes('localeSelect')) {
-        card.querySelector('h3').textContent = tr('langTitle', locale);
-        card.querySelector('p').textContent = tr('langDesc', locale);
-      } else if (card.innerHTML.includes('backgroundInput')) {
-        card.querySelector('h3').textContent = tr('bgTitle', locale);
-        card.querySelector('p').textContent = tr('bgDesc', locale);
-        if ($('backgroundBtn')) $('backgroundBtn').textContent = tr('btnChooseBg', locale);
-        if ($('clearBackgroundBtn')) $('clearBackgroundBtn').textContent = tr('btnResetBg', locale);
-      } else if (card.innerHTML.includes('accentStart')) {
-        card.querySelector('h3').textContent = tr('accentTitle', locale);
-        card.querySelector('p').textContent = tr('accentDesc', locale);
-        if ($('resetAccentBtn')) $('resetAccentBtn').textContent = tr('btnResetAcc', locale);
-        const startLbl = document.querySelector('label:has(#accentStart)');
-        if (startLbl) startLbl.childNodes[0].textContent = tr('lblStart', locale);
-        const endLbl = document.querySelector('label:has(#accentEnd)');
-        if (endLbl) endLbl.childNodes[0].textContent = tr('lblEnd', locale);
-      }
-    });
-
-    // Inputs & other UI text
-    const searchInput = document.getElementById('searchInput');
-    if (searchInput) searchInput.placeholder = tr('searchPlaceholder', locale);
-    const songInput = document.getElementById('songInput');
-    if (songInput) songInput.placeholder = tr('searchPlaceholder', locale);
-    const quickSearchInput = document.getElementById('quickSearchInput');
-    if (quickSearchInput) quickSearchInput.placeholder = tr('searchPlaceholder', locale);
-    const quickSearchInputNew = document.getElementById('quickSearchInputNew');
-    if (quickSearchInputNew) quickSearchInputNew.placeholder = tr('searchPlaceholder', locale);
-    const topNavSearch = document.getElementById('topNavSearch');
-    if (topNavSearch) topNavSearch.placeholder = tr('topSearchPlaceholder', locale);
-    
-    const mp3UploadLbl = document.querySelector('label[for="mp3FileInput"]');
-    if (mp3UploadLbl && mp3UploadLbl.childNodes.length > 2) {
-      mp3UploadLbl.childNodes[2].textContent = ' ' + tr('btnUploadMp3', locale);
-    }
-
-    if ($('toggleUiBtn')) $('toggleUiBtn').textContent = tr('btnOldUi', locale);
-    const serverLbl = document.querySelector('.server-label');
-    if (serverLbl) serverLbl.textContent = tr('lblServer', locale);
-    
-    // Bottom Player Filters
-    const bbSpeedSlider = $('bbSpeedSlider');
-    if (bbSpeedSlider && bbSpeedSlider.previousElementSibling) bbSpeedSlider.previousElementSibling.textContent = tr('lblSpeed', locale);
-    const bbPitchSlider = $('bbPitchSlider');
-    if (bbPitchSlider && bbPitchSlider.previousElementSibling) bbPitchSlider.previousElementSibling.textContent = tr('lblPitch', locale);
-
-    // Empty text & Queue text
-    const queueEmptyText = document.querySelector('#view-queue p');
-    if (queueEmptyText && queueEmptyText.textContent.includes('queue') || queueEmptyText && queueEmptyText.textContent.includes('kolejce') || queueEmptyText && queueEmptyText.textContent.includes('Nic w')) {
-      queueEmptyText.textContent = tr('queueEmpty', locale);
-    }
-    const quickQueueEmptyText = document.querySelector('#quickQueueList .empty-state-small');
-    if (quickQueueEmptyText) {
-      quickQueueEmptyText.textContent = tr('queueEmpty', locale);
-    }
-    const queueHint = document.querySelector('#view-queue span');
-    if (queueHint && (queueHint.textContent.includes('tabs') || queueHint.textContent.includes('zakładki'))) queueHint.textContent = tr('lblQueueHint', locale);
-
-    // Player View Titles & Buttons
-    const headers = document.querySelectorAll('#view-player .section-header-row h2');
-    if (headers && headers.length > 0) headers[0].textContent = tr('lblRecent', locale);
-    
-    const quickQueueH2 = document.querySelector('#queueBadge');
-    if (quickQueueH2 && quickQueueH2.parentNode && quickQueueH2.parentNode.childNodes[0]) {
-      quickQueueH2.parentNode.childNodes[0].textContent = tr('lblQuickQueue', locale);
-    }
-    
-    // The "Add song" button might be the only ghost-btn inside queue-header
-    const addSongBtn = document.querySelector('#view-player .queue-header button');
-    if (addSongBtn && addSongBtn.childNodes.length > 1) addSongBtn.childNodes[addSongBtn.childNodes.length-1].textContent = ' ' + tr('btnAddSong', locale);
-
-    if ($('shuffleQueueBtn')) $('shuffleQueueBtn').childNodes[$('shuffleQueueBtn').childNodes.length-1].textContent = ' ' + tr('btnShuffle', locale);
-    if ($('clearQueueBtn')) $('clearQueueBtn').childNodes[$('clearQueueBtn').childNodes.length-1].textContent = ' ' + tr('btnClearAll', locale);
-
-    const searchHint = document.querySelector('#view-search .section-sub');
-    if (searchHint) searchHint.textContent = tr('lblSearchHint', locale);
-    
-    const uploadLabel = document.querySelector('label[for="mp3Upload"]');
-    if (uploadLabel && uploadLabel.childNodes.length > 1) uploadLabel.childNodes[uploadLabel.childNodes.length-1].textContent = ' ' + tr('btnUploadMp3', locale);
-    
-    if ($('clearRecentBtn')) {
-      $('clearRecentBtn').textContent = tr('btnClearRecent', locale);
-      const prevP = $('clearRecentBtn').parentNode.previousElementSibling;
-      if (prevP && prevP.tagName === 'P') prevP.textContent = tr('descClearRecent', locale);
-    }
-
-    // PIN Screen Text
-    const pinTitle = document.querySelector('#pinOverlay h2');
-    if (pinTitle) pinTitle.textContent = tr('pinTitle', locale);
-    const pinDesc = document.querySelector('#pinOverlay p');
-    if (pinDesc) pinDesc.textContent = tr('pinDesc', locale);
-    const pinCancel = document.querySelector('#pinCancelBtn');
-    if (pinCancel) pinCancel.textContent = tr('btnCancel', locale);
-    
-    // Main Settings Screen Text
-    document.querySelectorAll('#view-settings .settings-card').forEach(card => {
-      const title = card.querySelector('h3');
-      const desc = card.querySelector('p');
-      if (card.innerHTML.includes('sendAnnouncementBtn')) {
-        if (title) title.textContent = tr('tabAnnounce', locale);
-        if (desc) desc.textContent = tr('descAnnounce', locale);
-        const btn = card.querySelector('#sendAnnouncementBtn');
-        if (btn) btn.textContent = tr('btnSendAnnounce', locale);
-        const input = card.querySelector('#announcementInput');
-        if (input) input.placeholder = tr('phAnnounce', locale);
-      } else if (card.innerHTML.includes('maintenanceBtn')) {
-        if (title) title.textContent = tr('tabMaint', locale);
-        if (desc) desc.textContent = tr('descMaint', locale);
-        const maintBtn = card.querySelector('#maintenanceBtn');
-        if (maintBtn && maintBtn.textContent.includes('Enable') || maintBtn && maintBtn.textContent.includes('Włącz')) {
-          maintBtn.textContent = tr('btnEnableMaint', locale);
-        } else if (maintBtn) {
-          maintBtn.textContent = tr('btnDisableMaint', locale);
-        }
-        const maintStatus = card.querySelector('#maintenanceStatus');
-        if (maintStatus && (maintStatus.textContent.includes('off') || maintStatus.textContent.includes('wyłączona'))) {
-          maintStatus.textContent = tr('lblMaintOff', locale);
-        } else if (maintStatus && maintStatus.textContent.trim().length > 0) {
-          maintStatus.textContent = tr('lblMaintOn', locale);
-        }
-      } else if (card.innerHTML.includes('saveApiBtn')) {
-        if (title) title.textContent = tr('tabApi', locale);
-        if (desc) desc.textContent = tr('descApi', locale);
-        const btnSave = card.querySelector('#saveApiBtn');
-        if (btnSave) btnSave.textContent = tr('btnSaveLocal', locale);
-        const btnTest = card.querySelector('#testApiBtn');
-        if (btnTest) btnTest.textContent = tr('btnTestConn', locale);
-        const btnChange = card.querySelector('#execApiBtn');
-        if (btnChange && btnChange.childNodes.length > 1) btnChange.childNodes[btnChange.childNodes.length-1].textContent = ' ' + tr('btnChangeGlobal', locale);
-      } else if (card.innerHTML.includes('CORS Enabled')) {
-        if (title) title.textContent = tr('tabSecurity', locale);
-        if (desc) desc.textContent = tr('descSecurity', locale);
-      } else if (card.innerHTML.includes('clearRecentBtn')) {
-        if (title) title.textContent = tr('tabClearHistory', locale);
-      } else if (card.innerHTML.includes('Built with')) {
-        if (title) title.textContent = tr('tabAbout', locale);
-      }
-    });
-    
-    // Status badges
-    const settingsUnlockedBadge = document.querySelector('.bottom-bar-left span');
-    if (settingsUnlockedBadge && (settingsUnlockedBadge.textContent.includes('Settings') || settingsUnlockedBadge.textContent.includes('Ustawienia'))) {
-      settingsUnlockedBadge.textContent = tr('lblUnlocked', locale);
-    }
-    
-    // Page Title
-    const activeNav = document.querySelector('.sidebar-nav a.active span') || document.querySelector('.sidebar-nav button.active span');
-    if (activeNav && $('pageTitle')) $('pageTitle').textContent = activeNav.textContent;
-    const mpLabel = document.querySelector('.topbar-left span');
-    if (mpLabel) mpLabel.textContent = tr('lblMusicPlayer', locale);
-    
-    // Trigger track count translation if possible
-    window.dlm_current_locale = locale; // store globally for dynamically injected text
+    const british = locale !== 'american';
+    localStorage.setItem('dlm_locale', british ? 'british' : 'american');
+    document.documentElement.lang = british ? 'en-GB' : 'en-US';
+    if (localeSelect) localeSelect.value = british ? 'british' : 'american';
+    const label = british ? 'Favourites' : 'Favorites';
+    const navLabel = document.querySelector('#nav-favorites span');
+    const viewTitle = document.querySelector('#view-favorites .section-title');
+    if (navLabel) navLabel.textContent = label;
+    if (viewTitle) viewTitle.textContent = label;
+    if (document.querySelector('#nav-favorites.active') && $('pageTitle')) $('pageTitle').textContent = label;
   }
-  
   if (localeSelect) {
     applyLocale(localStorage.getItem('dlm_locale') || 'british');
     localeSelect.addEventListener('change', () => applyLocale(localeSelect.value));
   }
-  // Background images stored via IndexedDB to bypass the 5MB browser quota for large files
-  const initDB = () => new Promise((resolve, reject) => {
-    const req = indexedDB.open('dlm_db', 1);
-    req.onupgradeneeded = e => e.target.result.createObjectStore('dlm_store');
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-  const saveBg = (data) => initDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('dlm_store', 'readwrite');
-    tx.objectStore('dlm_store').put(data, 'bg');
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject();
-  }));
-  const loadBg = () => initDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('dlm_store', 'readonly');
-    const req = tx.objectStore('dlm_store').get('bg');
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject();
-  }));
-  const clearBg = () => initDB().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('dlm_store', 'readwrite');
-    tx.objectStore('dlm_store').delete('bg');
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject();
-  }));
-
+  // Background images remain entirely in the current browser's local storage.
   const backgroundBtn = $('backgroundBtn'), backgroundInput = $('backgroundInput'), scene = document.querySelector('.bg-scene');
+  const gridOverlay = document.querySelector('.grid-overlay');
+  const gridToggleBtn = $('gridToggleBtn');
+  const gridSizeSlider = $('gridSizeSlider');
+  const gridSizeValue = $('gridSizeValue');
+  const gridSizeContainer = $('gridSizeContainer');
+  
+  // IndexedDB Helper for Backgrounds
+  const DB_NAME = 'DLMPlayerDB';
+  function saveBackgroundToDB(data) {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, 1);
+      request.onupgradeneeded = e => e.target.result.createObjectStore('bgStore');
+      request.onsuccess = e => {
+        const tx = e.target.result.transaction('bgStore', 'readwrite');
+        tx.objectStore('bgStore').put(data, 'background');
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+  function loadBackgroundFromDB() {
+    return new Promise((resolve) => {
+      const request = indexedDB.open(DB_NAME, 1);
+      request.onupgradeneeded = e => e.target.result.createObjectStore('bgStore');
+      request.onsuccess = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('bgStore')) { resolve(null); return; }
+        const getReq = db.transaction('bgStore', 'readonly').objectStore('bgStore').get('background');
+        getReq.onsuccess = () => resolve(getReq.result);
+        getReq.onerror = () => resolve(null);
+      };
+      request.onerror = () => resolve(null);
+    });
+  }
+  function clearBackgroundFromDB() {
+    return new Promise((resolve) => {
+      const request = indexedDB.open(DB_NAME, 1);
+      request.onupgradeneeded = e => e.target.result.createObjectStore('bgStore');
+      request.onsuccess = e => {
+        const tx = e.target.result.transaction('bgStore', 'readwrite');
+        tx.objectStore('bgStore').delete('background');
+        tx.oncomplete = () => resolve();
+      };
+      request.onerror = () => resolve();
+    });
+  }
+
   function applyLocalBackground(image) {
     if (!scene) return;
-    scene.style.backgroundImage = image ? `url("${image}")` : '';
-    scene.style.backgroundSize = image ? 'cover' : '';
-    scene.style.backgroundPosition = image ? 'center' : '';
+    const enableGridOnImage = localStorage.getItem('dlm_enable_image_grid') === 'true';
+    const gridAmount = localStorage.getItem('dlm_image_grid_amount') || '4';
+    const imageBlobs = localStorage.getItem('dlm_image_blobs_enabled') === 'true';
+    
+    if (gridToggleBtn) gridToggleBtn.checked = enableGridOnImage;
+    if (gridSizeSlider) gridSizeSlider.value = gridAmount;
+    if (gridSizeValue) gridSizeValue.textContent = gridAmount;
+    if (gridSizeContainer) gridSizeContainer.style.display = enableGridOnImage ? 'flex' : 'none';
+    
+    const blobs = scene.querySelectorAll('.blob');
+
+    if (imageBlobs && image) {
+      scene.style.backgroundImage = '';
+      if (gridOverlay) gridOverlay.style.display = 'none';
+      blobs.forEach(b => {
+        b.style.backgroundImage = `url("${image}")`;
+        b.style.backgroundSize = 'cover';
+        b.style.backgroundPosition = 'center';
+        // Reset opacity so image is clear
+        b.style.opacity = '0.8';
+        b.style.filter = 'blur(5px)'; // little blur
+      });
+    } else {
+      scene.style.backgroundImage = image ? `url("${image}")` : '';
+      if (image) {
+        if (gridOverlay) gridOverlay.style.display = 'none'; // hide the white dots grid
+        if (enableGridOnImage) {
+           scene.style.backgroundSize = `${100 / parseInt(gridAmount, 10)}vw auto`; // Scale by amount
+           scene.style.backgroundRepeat = 'repeat';
+           scene.style.backgroundPosition = 'top left';
+        } else {
+           scene.style.backgroundSize = 'cover';
+           scene.style.backgroundRepeat = 'no-repeat';
+           scene.style.backgroundPosition = 'center';
+        }
+      } else {
+        if (gridOverlay) gridOverlay.style.display = 'block'; // show the white dots grid on default anim
+        scene.style.backgroundSize = '';
+        scene.style.backgroundRepeat = '';
+        scene.style.backgroundPosition = '';
+      }
+    }
   }
   
-  const legacyBg = localStorage.getItem('dlm_local_background');
-  if (legacyBg) applyLocalBackground(legacyBg);
-  else loadBg().then(data => { if(data) applyLocalBackground(data); }).catch(()=>{});
+  // Try loading from DB first, fallback to localStorage if any leftover
+  loadBackgroundFromDB().then(res => {
+     let bg = res || localStorage.getItem('dlm_local_background') || '';
+     applyLocalBackground(bg);
+     window._currentBgData = bg;
+  });
+
+  if (gridToggleBtn) {
+    gridToggleBtn.addEventListener('change', () => {
+      localStorage.setItem('dlm_enable_image_grid', gridToggleBtn.checked);
+      applyLocalBackground(window._currentBgData || '');
+    });
+  }
+
+  if (gridSizeSlider) {
+    gridSizeSlider.addEventListener('input', e => {
+      if (gridSizeValue) gridSizeValue.textContent = e.target.value;
+      localStorage.setItem('dlm_image_grid_amount', e.target.value);
+      applyLocalBackground(window._currentBgData || '');
+    });
+  }
 
   if (backgroundBtn && backgroundInput) {
     backgroundBtn.addEventListener('click', () => backgroundInput.click());
@@ -1373,42 +1384,316 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!file) return;
       if (file.size > 25 * 1024 * 1024) { showToast('Choose an image smaller than 25 MB', 'error'); return; }
       const reader = new FileReader();
-      reader.onload = () => {
-        saveBg(reader.result).then(() => {
-          localStorage.removeItem('dlm_local_background');
-          applyLocalBackground(reader.result);
-          showToast('Background updated', 'success');
-        }).catch(() => showToast('Background could not be saved', 'error'));
+      reader.onload = () => { 
+        window._currentBgData = reader.result;
+        applyLocalBackground(reader.result); 
+        saveBackgroundToDB(reader.result)
+          .then(() => showToast('Background updated', 'success'))
+          .catch(() => showToast('Background could not be saved', 'error'));
       };
       reader.readAsDataURL(file);
     });
   }
   const clearBackgroundBtn = $('clearBackgroundBtn');
-  if (clearBackgroundBtn) clearBackgroundBtn.addEventListener('click', () => {
-    clearBg().then(() => {
+  if (clearBackgroundBtn) {
+    clearBackgroundBtn.addEventListener('click', () => {
+      window._currentBgData = '';
       localStorage.removeItem('dlm_local_background');
-      applyLocalBackground('');
-      showToast('Background cleared', 'info');
+      clearBackgroundFromDB().then(() => {
+        applyLocalBackground(''); 
+        showToast('Background cleared', 'info');
+      });
     });
-  });
-  const accentStart = $('accentStart'), accentEnd = $('accentEnd'), accentPreview = $('accentPreview');
-  function applyAccent(start, end) {
-    const root = document.documentElement;
-    root.style.setProperty('--accent-1', start);
-    root.style.setProperty('--accent-2', end);
-    root.style.setProperty('--accent-grad', `linear-gradient(135deg, ${start}, ${end})`);
-    if (accentPreview) accentPreview.style.background = `linear-gradient(135deg, ${start}, ${end})`;
-    if (accentStart) accentStart.value = start;
-    if (accentEnd) accentEnd.value = end;
-    localStorage.setItem('dlm_accent_start', start); localStorage.setItem('dlm_accent_end', end);
   }
-  if (accentStart && accentEnd) {
-    applyAccent(localStorage.getItem('dlm_accent_start') || '#6366f1', localStorage.getItem('dlm_accent_end') || '#8b5cf6');
-    accentStart.addEventListener('input', () => applyAccent(accentStart.value, accentEnd.value));
-    accentEnd.addEventListener('input', () => applyAccent(accentStart.value, accentEnd.value));
-  }
+  const accentPreview = $('accentPreview');
+  const accentColorList = $('accentColorList');
+  const addAccentColorBtn = $('addAccentColorBtn');
   const resetAccentBtn = $('resetAccentBtn');
-  if (resetAccentBtn) resetAccentBtn.addEventListener('click', () => applyAccent('#6366f1', '#8b5cf6'));
+  const bgScene = $('bgScene');
+
+  let accentColors = JSON.parse(localStorage.getItem('dlm_accent_colors'));
+  if (!accentColors || accentColors.length < 2) {
+    const oldStart = localStorage.getItem('dlm_accent_start') || '#6366f1';
+    const oldEnd = localStorage.getItem('dlm_accent_end') || '#8b5cf6';
+    accentColors = [oldStart, oldEnd];
+  }
+
+  function applyAccent(colors) {
+    const root = document.documentElement;
+    if (colors.length >= 2) {
+      root.style.setProperty('--accent-1', colors[0]);
+      root.style.setProperty('--accent-2', colors[1]);
+    }
+    const gradStr = `linear-gradient(135deg, ${colors.join(', ')})`;
+    root.style.setProperty('--accent-grad', gradStr);
+    if (accentPreview) accentPreview.style.background = gradStr;
+    localStorage.setItem('dlm_accent_colors', JSON.stringify(colors));
+    updateDynamicBlobs(colors);
+  }
+
+  function updateDynamicBlobs(colors) {
+    if (!bgScene) return;
+    const existingBlobs = bgScene.querySelectorAll('.blob');
+    const numBlobs = colors.length * 2;
+    
+    if (existingBlobs.length !== numBlobs) {
+      // Re-generate blobs if length changed
+      existingBlobs.forEach(el => el.remove());
+      for (let i = 0; i < numBlobs; i++) {
+        const blob = document.createElement('div');
+        blob.className = 'blob';
+        const size = 300 + Math.random() * 400; // 300px to 700px
+        blob.style.width = `${size}px`;
+        blob.style.height = `${size}px`;
+        // Spread them out roughly
+        blob.style.top = `${-20 + Math.random() * 100}%`;
+        blob.style.left = `${-20 + Math.random() * 100}%`;
+        blob.style.animationDelay = `-${Math.random() * 20}s`;
+        blob.style.animationDuration = `${15 + Math.random() * 15}s`;
+        blob._baseColorIndex = i % colors.length;
+        const color = colors[blob._baseColorIndex];
+        blob.style.background = `radial-gradient(circle, ${color}, transparent 70%)`;
+        blob.style.animation = 'none'; // disable CSS float
+        blob._vx = (Math.random() - 0.5) * 3;
+        blob._vy = (Math.random() - 0.5) * 3;
+        blob._tx = 0;
+        blob._ty = 0;
+        bgScene.appendChild(blob);
+        activePhysicsBlobs.add(blob);
+      }
+      if (!physicsLoopActive) {
+        physicsLoopActive = true;
+        requestAnimationFrame(physicsLoop);
+      }
+    } else {
+      // Just update colors dynamically
+      existingBlobs.forEach(blob => {
+        const color = colors[blob._baseColorIndex];
+        blob.style.background = `radial-gradient(circle, ${color}, transparent 70%)`;
+      });
+    }
+    applyLocalBackground(window._currentBgData || '');
+  }
+
+  function createCustomColorPicker(initialColor, onChange) {
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'relative';
+    
+    const swatch = document.createElement('div');
+    swatch.style.width = '42px';
+    swatch.style.height = '28px';
+    swatch.style.borderRadius = '6px';
+    swatch.style.backgroundColor = initialColor;
+    swatch.style.cursor = 'pointer';
+    swatch.style.border = '1px solid rgba(255,255,255,0.2)';
+    
+    const popup = document.createElement('div');
+    popup.style.position = 'absolute';
+    popup.style.top = '100%';
+    popup.style.left = '0';
+    popup.style.marginTop = '8px';
+    popup.style.padding = '12px';
+    popup.style.background = 'rgba(16, 16, 28, 0.98)';
+    popup.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+    popup.style.borderRadius = '12px';
+    popup.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.5)';
+    popup.style.display = 'none';
+    popup.style.zIndex = '1000';
+    popup.style.width = 'max-content';
+
+    const presets = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#f43f5e', '#ffffff', '#94a3b8', '#000000'];
+    const grid = document.createElement('div');
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = 'repeat(5, 1fr)';
+    grid.style.gap = '8px';
+    grid.style.marginBottom = '12px';
+
+    presets.forEach(color => {
+      const p = document.createElement('div');
+      p.style.width = '24px';
+      p.style.height = '24px';
+      p.style.borderRadius = '4px';
+      p.style.backgroundColor = color;
+      p.style.cursor = 'pointer';
+      p.style.border = '1px solid rgba(255,255,255,0.1)';
+      p.addEventListener('click', (e) => {
+        e.stopPropagation();
+        swatch.style.backgroundColor = color;
+        hexInput.value = color;
+        onChange(color);
+        popup.style.display = 'none';
+      });
+      grid.appendChild(p);
+    });
+    
+    const hexRow = document.createElement('div');
+    hexRow.style.display = 'flex';
+    hexRow.style.gap = '8px';
+    hexRow.style.alignItems = 'center';
+    
+    const hash = document.createElement('span');
+    hash.textContent = '#';
+    hash.style.color = 'rgba(255,255,255,0.5)';
+    
+    const hexInput = document.createElement('input');
+    hexInput.type = 'text';
+    hexInput.value = initialColor;
+    hexInput.style.flex = '1';
+    hexInput.style.width = '46px';
+    hexInput.style.background = 'rgba(255,255,255,0.05)';
+    hexInput.style.border = '1px solid rgba(255,255,255,0.1)';
+    hexInput.style.borderRadius = '6px';
+    hexInput.style.color = '#fff';
+    hexInput.style.padding = '4px 8px';
+    hexInput.style.fontSize = '14px';
+    hexInput.style.outline = 'none';
+    
+    hexInput.addEventListener('input', (e) => {
+      let val = e.target.value;
+      if (!val.startsWith('#')) val = '#' + val;
+      if (/^#[0-9A-Fa-f]{6}$/.test(val) || /^#[0-9A-Fa-f]{3}$/.test(val)) {
+        swatch.style.backgroundColor = val;
+        onChange(val);
+      }
+    });
+
+    // Native color picker (Hue Circle) hidden
+    const nativePicker = document.createElement('input');
+    nativePicker.type = 'color';
+    nativePicker.value = initialColor;
+    nativePicker.style.position = 'absolute';
+    nativePicker.style.opacity = '0';
+    nativePicker.style.pointerEvents = 'none';
+    nativePicker.addEventListener('input', (e) => {
+      const val = e.target.value;
+      swatch.style.backgroundColor = val;
+      hexInput.value = val;
+      onChange(val);
+    });
+
+    const hueBtn = document.createElement('button');
+    hueBtn.style.width = '26px';
+    hueBtn.style.height = '26px';
+    hueBtn.style.borderRadius = '4px';
+    hueBtn.style.border = '1px solid rgba(255,255,255,0.2)';
+    hueBtn.style.cursor = 'pointer';
+    hueBtn.style.background = 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)';
+    hueBtn.style.flexShrink = '0';
+    hueBtn.title = 'Hue Circle / Advanced Picker';
+    
+    hueBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      nativePicker.click();
+    });
+
+    // Eyedropper API
+    const eyeBtn = document.createElement('button');
+    eyeBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/><path d="M16 8L8 16"/><line x1="3" y1="21" x2="6.5" y2="17.5"/></svg>';
+    eyeBtn.style.width = '26px';
+    eyeBtn.style.height = '26px';
+    eyeBtn.style.borderRadius = '4px';
+    eyeBtn.style.border = '1px solid rgba(255,255,255,0.1)';
+    eyeBtn.style.cursor = 'pointer';
+    eyeBtn.style.background = 'rgba(255,255,255,0.05)';
+    eyeBtn.style.color = 'rgba(255,255,255,0.8)';
+    eyeBtn.style.display = window.EyeDropper ? 'flex' : 'none';
+    eyeBtn.style.alignItems = 'center';
+    eyeBtn.style.justifyContent = 'center';
+    eyeBtn.style.flexShrink = '0';
+    eyeBtn.title = 'Eyedropper';
+    
+    eyeBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!window.EyeDropper) return;
+      try {
+        const eyeDropper = new window.EyeDropper();
+        const result = await eyeDropper.open();
+        swatch.style.backgroundColor = result.sRGBHex;
+        hexInput.value = result.sRGBHex;
+        onChange(result.sRGBHex);
+      } catch (err) {}
+    });
+
+    hexRow.appendChild(hash);
+    hexRow.appendChild(hexInput);
+    hexRow.appendChild(hueBtn);
+    hexRow.appendChild(eyeBtn);
+    
+    popup.appendChild(grid);
+    popup.appendChild(hexRow);
+    
+    wrapper.appendChild(swatch);
+    wrapper.appendChild(popup);
+    wrapper.appendChild(nativePicker);
+    
+    swatch.addEventListener('click', (e) => {
+      e.stopPropagation();
+      popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+    });
+    
+    document.addEventListener('click', (e) => {
+      if (!wrapper.contains(e.target)) {
+        popup.style.display = 'none';
+      }
+    });
+
+    return { wrapper };
+  }
+
+  function renderAccentPickers() {
+    if (!accentColorList) return;
+    
+    accentColorList.innerHTML = '';
+    accentColors.forEach((color, index) => {
+      const container = document.createElement('div');
+      container.style.display = 'flex';
+      container.style.alignItems = 'center';
+      container.style.gap = '8px';
+      
+      const picker = createCustomColorPicker(color, (newColor) => {
+        accentColors[index] = newColor;
+        applyAccent(accentColors);
+      });
+      
+      container.appendChild(picker.wrapper);
+
+      if (accentColors.length > 2) {
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = '×';
+        removeBtn.className = 'ghost-btn danger-btn';
+        removeBtn.style.padding = '4px 8px';
+        removeBtn.style.minWidth = '0';
+        removeBtn.style.fontSize = '14px';
+        removeBtn.addEventListener('click', () => {
+          accentColors.splice(index, 1);
+          renderAccentPickers(); 
+          applyAccent(accentColors);
+        });
+        container.appendChild(removeBtn);
+      }
+      accentColorList.appendChild(container);
+    });
+  }
+
+  if (addAccentColorBtn) {
+    addAccentColorBtn.addEventListener('click', () => {
+      accentColors.push(accentColors[accentColors.length - 1]);
+      renderAccentPickers(); // Force re-render
+      applyAccent(accentColors);
+    });
+  }
+  
+  if (resetAccentBtn) {
+    resetAccentBtn.addEventListener('click', () => {
+      accentColors = ['#6366f1', '#8b5cf6'];
+      renderAccentPickers(); // Force re-render
+      applyAccent(accentColors);
+    });
+  }
+  
+  // Initial apply
+  renderAccentPickers();
+  applyAccent(accentColors);
   // Speed and Pitch: input for instant UI, change for API call to avoid spam
   const speedSlider = $('bbSpeedSlider');
   const speedVal = $('bbSpeedVal');
@@ -1421,7 +1706,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!selectedGuildId) return;
       try {
         await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/speed?guildId=${selectedGuildId}&val=${val}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
-      } catch (err) { console.error(err); showToast("API Error: " + err.message, "error"); }
+      } catch (err) { console.error(err); }
     });
   }
   
@@ -1436,7 +1721,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!selectedGuildId) return;
       try {
         await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/pitch?guildId=${selectedGuildId}&val=${val}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
-      } catch (err) { console.error(err); showToast("API Error: " + err.message, "error"); }
+      } catch (err) { console.error(err); }
     });
   }
   // Volume slider and mute toggle
@@ -1499,7 +1784,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const bb = document.querySelector('.bottom-player-bar');
         const activeNav = document.querySelector('.nav-item.active');
         const currentView = activeNav ? activeNav.dataset.view : 'player';
-        if (bb && (currentView === 'player' || currentView === 'favorites')) bb.style.display = 'flex';
+        if (bb && currentView === 'player') bb.style.display = 'flex';
       }
     });
     // Init button text
@@ -1621,7 +1906,7 @@ document.addEventListener('DOMContentLoaded', () => {
     finally { maintenanceBtn.disabled = false; }
   });
   // Executive PIN for Global URL change
-  const EXEC_PIN = '19731975';
+  const EXEC_PIN = 'MTk3MzE5NzU=';
   const EXEC_BAN_KEY = 'dlm_exec_ban_until';
   let execPinAttempts = 0;
   const execApiBtn = $('execApiBtn');
@@ -1635,7 +1920,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(`Settings locked for ${mins} more minutes.`, 'error');
         // Offer executive override (Do NOT show the code in the prompt)
         const execOverride = prompt(`Settings are BANNED for ${mins} more minute(s).\n\nEnter Executive PIN to unlock immediately:`);
-        if (execOverride === EXEC_PIN) {
+        if (execOverride && btoa(execOverride) === EXEC_PIN) {
           localStorage.removeItem(EXEC_BAN_KEY);
           execPinAttempts = 0;
           showToast('Executive override — Settings unlocked!', 'success');
@@ -1647,18 +1932,32 @@ document.addEventListener('DOMContentLoaded', () => {
       // Ask for Executive PIN (Do NOT show the code in the prompt)
       const pin = prompt('Enter Executive PIN to change the Global API URL:');
       if (pin === null) return; // cancelled
-      if (pin === EXEC_PIN) {
+      if (btoa(pin) === EXEC_PIN) {
         execPinAttempts = 0;
         const url = prompt('EXECUTIVE ACCESS GRANTED ✓\n\nEnter the new Global Bot API URL for all users:', API_BASE_URL);
         if (url && url.trim()) {
           const clean = url.trim();
+          
+          fetch(API_BASE_URL + '/api/update-global-url', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pin: atob(EXEC_PIN), url: clean })
+          }).then(res => res.json()).then(data => {
+              if (data.status === 'success') {
+                  showToast('Global API URL permanently updated across all users!', 'success');
+              } else {
+                  showToast('Failed to update globally: ' + data.error, 'error');
+              }
+          }).catch(err => {
+              console.error(err);
+              showToast('Failed to reach backend for global update', 'error');
+          });
+
           API_BASE_URL = clean;
           localStorage.setItem('dlm_api_url', clean);
           $('apiUrlInput').value = clean;
           stopPolling(); nowPlayingData = null; selectedGuildId = null;
           loadGuilds();
-          showToast('Global API URL updated! Remember to also update app.js on GitHub to make it permanent.', 'success');
-          setTimeout(() => alert('To make this permanent for ALL users:\n\nEdit app.js on GitHub and change line 7 to:\n\nlet API_BASE_URL = localStorage.getItem(\'dlm_api_url\') || \'' + clean + '\';'), 500);
         }
       } else {
         execPinAttempts++;
@@ -1701,7 +2000,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   // Sidebar toggle
-  $('sidebarToggle').addEventListener('click', () => $('sidebar').classList.toggle('open'));
+  $('sidebarToggle').addEventListener('click', () => {
+    if (window.innerWidth <= 768) {
+      $('sidebar').classList.toggle('open');
+    } else {
+      const isHidden = $('sidebar').classList.toggle('hidden');
+      document.body.classList.toggle('sidebar-hidden', isHidden);
+    }
+  });
   document.addEventListener('click', e => {
     const sb = $('sidebar'), tog = $('sidebarToggle');
     if (window.innerWidth <= 768 && sb.classList.contains('open')
@@ -1714,4 +2020,249 @@ document.addEventListener('DOMContentLoaded', () => {
   setView('player');
   loadGuilds();
   refreshMaintenanceStatus();
+  // Start physics collision loop always
+  if (!physicsLoopActive) {
+    physicsLoopActive = true;
+    requestAnimationFrame(physicsLoop);
+  }
 });
+
+// BlueSteelAI Modal Logic - event delegation
+document.body.addEventListener('click', (e) => {
+  // Open modal
+  if (e.target && e.target.id === 'bluesteelAiBtn') {
+    const modal = document.getElementById('aiModal');
+    if (modal) modal.style.display = 'flex';
+    return;
+  }
+  // Close modal - close button
+  if (e.target && e.target.id === 'closeAiModal') {
+    const modal = document.getElementById('aiModal');
+    if (modal) modal.style.display = 'none';
+    return;
+  }
+  // Close modal - click on backdrop
+  if (e.target && e.target.id === 'aiModal') {
+    e.target.style.display = 'none';
+  }
+});
+
+// Easter Egg: Draggable Physics Blobs
+let draggedBlob = null;
+let blobStartX = 0, blobStartY = 0;
+let lastMouseX = 0, lastMouseY = 0;
+let mouseVx = 0, mouseVy = 0;
+let physicsLoopActive = false;
+const activePhysicsBlobs = new Set();
+
+function physicsLoop() {
+  const allStaticBlobs = document.querySelectorAll('.blob');
+  if (activePhysicsBlobs.size === 0 && allStaticBlobs.length < 2) {
+    physicsLoopActive = false;
+    return;
+  }
+  
+  const blobArray = Array.from(activePhysicsBlobs);
+  
+  blobArray.forEach(blob => {
+    if (blob === draggedBlob) return; // don't move while dragged
+
+    // maintain baseline speed
+    const speed = Math.hypot(blob._vx, blob._vy);
+    const baseline = 0.6;
+    if (speed > baseline) {
+      blob._vx *= 0.99; // slow down to baseline if thrown fast
+      blob._vy *= 0.99;
+    } else if (speed < baseline && speed > 0) {
+      blob._vx *= 1.02; // speed up to baseline
+      blob._vy *= 1.02;
+    } else if (speed === 0) {
+      blob._vx = (Math.random() - 0.5) * baseline;
+      blob._vy = (Math.random() - 0.5) * baseline;
+    }
+    
+    blob._tx += blob._vx;
+    blob._ty += blob._vy;
+    
+    // bounding box logic against window edges
+    const rect = blob.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const r = rect.width / 2;
+    
+    // store center for collision checks
+    blob._cx = cx;
+    blob._cy = cy;
+    blob._r = r;
+    
+    // bounce off window edges
+    if (cx < 0 && blob._vx < 0) { blob._vx *= -0.95; }
+    if (cx > window.innerWidth && blob._vx > 0) { blob._vx *= -0.95; }
+    if (cy < 0 && blob._vy < 0) { blob._vy *= -0.95; }
+    if (cy > window.innerHeight && blob._vy > 0) { blob._vy *= -0.95; }
+    
+    blob.style.transform = `translate(${blob._tx}px, ${blob._ty}px)`;
+  });
+
+  // Blob-to-blob collision detection (all blobs, not just active ones)
+  const allBlobs = Array.from(document.querySelectorAll('.blob'));
+  for (let i = 0; i < allBlobs.length; i++) {
+    for (let j = i + 1; j < allBlobs.length; j++) {
+      const a = allBlobs[i];
+      const b = allBlobs[j];
+      
+      // Get positions (use cached or compute from getBoundingClientRect)
+      const ra = a.getBoundingClientRect();
+      const rb = b.getBoundingClientRect();
+      const cax = ra.left + ra.width / 2;
+      const cay = ra.top + ra.height / 2;
+      const cbx = rb.left + rb.width / 2;
+      const cby = rb.top + rb.height / 2;
+      const rA = ra.width / 2;
+      const rB = rb.width / 2;
+      
+      const dx = cbx - cax;
+      const dy = cby - cay;
+      const dist = Math.hypot(dx, dy);
+      const minDist = rA * 0.6 + rB * 0.6; // use 60% radius so they feel soft
+      
+      if (dist < minDist && dist > 0.1) {
+        // Normalised collision axis
+        const nx = dx / dist;
+        const ny = dy / dist;
+        
+        // Init velocities if missing
+        const initBlob = (blob) => {
+          if (blob._vx === undefined) {
+            blob._vx = 0; blob._vy = 0;
+            blob.style.animation = 'none';
+            const match = (blob.style.transform || '').match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+            blob._tx = match ? parseFloat(match[1]) : 0;
+            blob._ty = match ? parseFloat(match[2]) : 0;
+          }
+        };
+        initBlob(a);
+        initBlob(b);
+        
+        // Relative velocity along collision normal
+        const relVx = b._vx - a._vx;
+        const relVy = b._vy - a._vy;
+        const relVn = relVx * nx + relVy * ny;
+        
+        // Only resolve if they're moving toward each other
+        if (relVn < 0) {
+          const restitution = 0.85; // bounciness
+          const impulse = -(1 + restitution) * relVn / 2;
+          
+          a._vx -= impulse * nx;
+          a._vy -= impulse * ny;
+          b._vx += impulse * nx;
+          b._vy += impulse * ny;
+          
+          // Wake both blobs up
+          activePhysicsBlobs.add(a);
+          activePhysicsBlobs.add(b);
+        }
+        
+        // Positional correction to stop overlap
+        const overlap = minDist - dist;
+        a._tx -= nx * overlap * 0.5;
+        a._ty -= ny * overlap * 0.5;
+        b._tx += nx * overlap * 0.5;
+        b._ty += ny * overlap * 0.5;
+        a.style.transform = `translate(${a._tx}px, ${a._ty}px)`;
+        b.style.transform = `translate(${b._tx}px, ${b._ty}px)`;
+      }
+    }
+  }
+  
+  requestAnimationFrame(physicsLoop);
+}
+
+document.addEventListener('mousedown', (e) => {
+  if (e.target.closest('.glass-card, .sidebar, .bottom-player-bar, .top-bar, button, input, select, .accent-picker')) return;
+  const blobs = document.querySelectorAll('.blob');
+  if (!blobs.length) return;
+  
+  let closest = null, minDistance = Infinity;
+  blobs.forEach(blob => {
+    const rect = blob.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dist = Math.hypot(cx - e.clientX, cy - e.clientY);
+    if (dist < minDistance) {
+      minDistance = dist;
+      closest = blob;
+    }
+  });
+  
+  if (closest && minDistance < 500) {
+    draggedBlob = closest;
+    draggedBlob.style.animation = 'none'; // pause float
+    activePhysicsBlobs.delete(draggedBlob);
+    document.body.style.userSelect = 'none';
+    
+    blobStartX = e.clientX;
+    blobStartY = e.clientY;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    mouseVx = 0;
+    mouseVy = 0;
+    
+    const currentTransform = draggedBlob.style.transform || 'translate(0px, 0px)';
+    let tx = 0, ty = 0;
+    const match = currentTransform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+    if (match) {
+      tx = parseFloat(match[1]);
+      ty = parseFloat(match[2]);
+    }
+    draggedBlob._tx = tx;
+    draggedBlob._ty = ty;
+  }
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!draggedBlob) return;
+  mouseVx = e.clientX - lastMouseX;
+  mouseVy = e.clientY - lastMouseY;
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
+  
+  const dx = e.clientX - blobStartX;
+  const dy = e.clientY - blobStartY;
+  draggedBlob.style.transform = `translate(${draggedBlob._tx + dx}px, ${draggedBlob._ty + dy}px)`;
+});
+
+document.addEventListener('mouseup', () => {
+  if (draggedBlob) {
+    document.body.style.userSelect = '';
+    draggedBlob._tx += (lastMouseX - blobStartX);
+    draggedBlob._ty += (lastMouseY - blobStartY);
+    draggedBlob._vx = mouseVx;
+    draggedBlob._vy = mouseVy;
+    
+    activePhysicsBlobs.add(draggedBlob);
+    draggedBlob = null;
+    
+    if (!physicsLoopActive) {
+      physicsLoopActive = true;
+      requestAnimationFrame(physicsLoop);
+    }
+  }
+});
+
+// "Connected" Light Easter Egg
+const statusDotEl = document.getElementById('statusDot');
+if (statusDotEl) {
+  statusDotEl.style.cursor = 'pointer';
+  statusDotEl.addEventListener('click', () => {
+    localStorage.setItem('dlm_image_blobs_enabled', 'true');
+    const textEl = document.getElementById('statusText');
+    if (textEl) {
+      textEl.textContent = 'Easter Egg Enabled: To Disable, use PIN 8008 in Admin Settings';
+    }
+    setTimeout(() => window.location.reload(), 2500);
+  });
+}
+
+
