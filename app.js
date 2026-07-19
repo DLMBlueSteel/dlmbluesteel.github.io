@@ -1276,6 +1276,25 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   window.syncSettingsToCloud = syncSettingsToCloud; // Expose globally for accent/settings to trigger
 
+  const topSyncBtn = $('topSyncBtn');
+  if (topSyncBtn) {
+    topSyncBtn.addEventListener('click', () => {
+      if (!localStorage.getItem('dlm_user_token')) {
+        showToast('You must log in to sync data!', 'error');
+        return;
+      }
+      // Add a quick spinning animation
+      const icon = topSyncBtn.querySelector('svg');
+      if (icon) {
+        icon.style.transition = 'transform 0.5s ease-in-out';
+        icon.style.transform = `rotate(360deg)`;
+        setTimeout(() => { icon.style.transition = 'none'; icon.style.transform = 'none'; }, 500);
+      }
+      syncSettingsToCloud();
+      showToast('Data Synced to Cloud! \u2601\ufe0f', 'success');
+    });
+  }
+
   if ($('loginSubmitBtn') && authModal) {
     $('loginSubmitBtn').addEventListener('click', async () => {
       const usernameInput = $('loginUsernameInput');
