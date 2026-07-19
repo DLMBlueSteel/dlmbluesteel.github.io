@@ -1036,16 +1036,566 @@ function parseDurationSecs(str) {
 
 // Init
 document.addEventListener('DOMContentLoaded', () => {
+  // Onboarding System
+  const onboardingCompleted = localStorage.getItem('dlm_onboarding_completed') === 'true';
+  const onboardingModal = $('onboardingModal');
+  
   // Update Log Modal v2.2
   const updateLogSeen = localStorage.getItem('v2.2_update_seen');
   const updateLogModal = $('updateLogModal');
   const closeUpdateModalBtn = $('closeUpdateModalBtn');
   const playCelebrationBtn = $('playCelebrationBtn');
   
-  if (!updateLogSeen && updateLogModal) {
+  if (onboardingModal && !onboardingCompleted) {
+    onboardingModal.style.display = 'flex';
+    
+    const step1 = $('onboardingStep1');
+    const step2 = $('onboardingStep2');
+    const step3 = $('onboardingStep3');
+    
+    $('obNextToAccountBtn').addEventListener('click', () => {
+      step1.style.display = 'none';
+      step2.style.display = 'block';
+    });
+    
+    $('obMakeAccountBtn').addEventListener('click', () => {
+      const authM = $('authModal');
+      if (authM) authM.style.display = 'flex';
+      step2.style.display = 'none';
+      step3.style.display = 'block';
+    });
+    
+    $('obSkipAccountBtn').addEventListener('click', () => {
+      step2.style.display = 'none';
+      step3.style.display = 'block';
+    });
+    
+    $('obFinishBtn').addEventListener('click', () => {
+      localStorage.setItem('dlm_onboarding_completed', 'true');
+      onboardingModal.style.display = 'none';
+      if (!updateLogSeen && updateLogModal) {
+        updateLogModal.style.display = 'flex';
+        localStorage.setItem('v2.2_update_seen', 'true');
+      }
+    });
+  } else if (!updateLogSeen && updateLogModal) {
     updateLogModal.style.display = 'flex';
     localStorage.setItem('v2.2_update_seen', 'true');
   }
+
+  // Auth System Logic
+  const authModal = $('authModal');
+  const authTabLogin = $('authTabLogin');
+  const authTabRegister = $('authTabRegister');
+  const authLoginForm = $('authLoginForm');
+  const authRegisterForm = $('authRegisterForm');
+  const authModalTitle = $('authModalTitle');
+
+  if (authTabLogin && authTabRegister) {
+    authTabLogin.addEventListener('click', () => {
+      authTabLogin.className = 'gradient-btn';
+      authTabRegister.className = 'ghost-btn';
+      authLoginForm.style.display = 'flex';
+      authRegisterForm.style.display = 'none';
+      authModalTitle.textContent = 'Welcome Back';
+    });
+
+    authTabRegister.addEventListener('click', () => {
+      authTabRegister.className = 'gradient-btn';
+      authTabLogin.className = 'ghost-btn';
+      authRegisterForm.style.display = 'flex';
+      authLoginForm.style.display = 'none';
+      authModalTitle.textContent = 'Create an Account';
+    });
+  }
+
+  // ToS Checkbox Logic
+  const tosCheckbox = $('tosCheckbox');
+  const registerSubmitBtn = $('registerSubmitBtn');
+  if (tosCheckbox && registerSubmitBtn) {
+    tosCheckbox.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        registerSubmitBtn.style.opacity = '1';
+        registerSubmitBtn.style.pointerEvents = 'auto';
+      } else {
+        registerSubmitBtn.style.opacity = '0.5';
+        registerSubmitBtn.style.pointerEvents = 'none';
+      }
+    });
+  }
+
+  // ToS Modal Logic
+  const tosModal = $('tosModal');
+  const openTosBtn = $('openTosBtn');
+  const closeTosModalBtn = $('closeTosModalBtn');
+
+  if (openTosBtn && tosModal) {
+    openTosBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      tosModal.style.display = 'flex';
+    });
+  }
+  if (closeTosModalBtn && tosModal) {
+    closeTosModalBtn.addEventListener('click', () => {
+      tosModal.style.display = 'none';
+    });
+  }
+
+  // Modals Submit & Close
+  if ($('closeAuthModalBtn') && authModal) {
+    $('closeAuthModalBtn').addEventListener('click', () => {
+      authModal.style.display = 'none';
+    });
+  }
+
+  // Dynamic Greeting Logic
+  const dynamicGreeting = $('dynamicGreeting');
+  const holidayToggleBtn = $('holidayToggleBtn');
+
+  // Load holiday toggle preference
+  const holidayEnabled = localStorage.getItem('dlm_holiday_enabled') !== 'false';
+  if (holidayToggleBtn) {
+    holidayToggleBtn.checked = holidayEnabled;
+    holidayToggleBtn.addEventListener('change', (e) => {
+      localStorage.setItem('dlm_holiday_enabled', e.target.checked);
+      updateGreeting();
+      if (typeof window.syncSettingsToCloud === 'function') window.syncSettingsToCloud();
+    });
+  }
+
+  function updateGreeting() {
+    if (!dynamicGreeting) return;
+    const rawUsername = localStorage.getItem('dlm_username') || '';
+    
+    // Guard against literal "undefined" string or empty
+    if (!rawUsername || rawUsername === 'undefined') {
+      dynamicGreeting.style.display = 'none';
+      return;
+    }
+    dynamicGreeting.style.display = 'block';
+
+    const hour = new Date().getHours();
+    let nameToUse = rawUsername;
+
+    let templates = [];
+    if (hour >= 5 && hour < 12) {
+      if (rawUsername && Math.random() < 0.05) nameToUse = "Early Bird";
+      templates = ["Good morning, USER!", "Mornin' USER!", "What's up, USER?"];
+    } else if (hour >= 12 && hour < 17) {
+      templates = ["Good afternoon, USER!", "How you doing, USER?", "Welcome, USER!"];
+    } else if (hour >= 17 && hour < 22) {
+      templates = ["Good evening, USER!", "How are you, USER?", "Exhausting Day, USER!"];
+    } else {
+      if (rawUsername && Math.random() < 0.05) nameToUse = "Night Owl";
+      templates = ["Goodnight, USER!", "Ready to Sleep, USER?", "Musical Dreams, USER!"];
+    }
+
+    let rawGreeting = templates[Math.floor(Math.random() * templates.length)];
+    let greeting = rawGreeting.replace(/USER/g, nameToUse);
+
+    // Holiday & Birthday Logic
+    const isHolidayEnabled = localStorage.getItem('dlm_holiday_enabled') !== 'false';
+    const month = new Date().getMonth();
+    const date = new Date().getDate();
+    
+    if (isHolidayEnabled) {
+      if (month === 9 && date === 31) greeting = `Happy Halloween, ${rawUsername}!`;
+      else if (month === 11 && date === 25) greeting = `Merry Christmas, ${rawUsername}!`;
+      
+      const birthday = localStorage.getItem('dlm_birthday');
+      if (birthday) {
+        let bMonth = -1, bDate = -1;
+        if (birthday.includes('/')) {
+          const p = birthday.split('/');
+          bDate = parseInt(p[0], 10);
+          bMonth = parseInt(p[1], 10) - 1;
+        } else if (birthday.includes('-')) {
+          const p = birthday.split('-');
+          if (p.length === 3) {
+            bMonth = parseInt(p[1], 10) - 1;
+            bDate = parseInt(p[2], 10);
+          } else if (p.length === 2) {
+            bDate = parseInt(p[0], 10);
+            bMonth = parseInt(p[1], 10) - 1;
+          }
+        }
+        if (bMonth === month && bDate === date) {
+          greeting = `Happy Birthday, ${rawUsername}!`;
+        }
+      }
+    }
+
+    dynamicGreeting.textContent = greeting;
+  }
+  updateGreeting();
+  setInterval(updateGreeting, 60000); // Update every minute
+
+  // Auth Submit Validation Logic & API Sync
+  function syncSettingsToCloud() {
+    const username = localStorage.getItem('dlm_username');
+    const token = localStorage.getItem('dlm_user_token');
+    if (!username || !token) return;
+
+    const settings = {
+      holidayEnabled: localStorage.getItem('dlm_holiday_enabled'),
+      birthday: localStorage.getItem('dlm_birthday'),
+      accentColors: localStorage.getItem('dlm_accent_colors')
+    };
+
+    fetch(API_BASE_URL.replace(/\/$/, '') + '/api/user/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, token, settings })
+    }).then(res => res.json()).then(data => {
+      if (data.status === 'success') {
+        console.log('Settings successfully synced to cloud.');
+      } else {
+        console.error('Sync failed:', data.error);
+      }
+    }).catch(err => console.error('Sync error:', err));
+  }
+  window.syncSettingsToCloud = syncSettingsToCloud; // Expose globally for accent/settings to trigger
+
+  if ($('loginSubmitBtn') && authModal) {
+    $('loginSubmitBtn').addEventListener('click', async () => {
+      const usernameInput = $('loginUsernameInput');
+      const passwordInput = $('loginPasswordInput');
+      const errorMsg = $('loginError');
+      
+      if (!usernameInput.value || !passwordInput.value) {
+        errorMsg.textContent = 'Username and Password are required.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+      
+      try {
+        const res = await fetch(API_BASE_URL.replace(/\/$/, '') + '/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: usernameInput.value, password: passwordInput.value })
+        });
+        const data = await res.json();
+        
+        if (data.error === 'Banned') {
+           const banOverlay = $('banOverlay');
+           if (banOverlay) {
+             $('banOverlayReason').textContent = `Reason: ${data.reason}`;
+             banOverlay.classList.remove('hidden');
+             banOverlay.classList.add('bb-enter-anim');
+           }
+           errorMsg.style.display = 'none';
+           authModal.style.display = 'none';
+           return;
+        }
+
+        if (data.token) {
+          errorMsg.style.display = 'none';
+          const username = data.account ? data.account.username : usernameInput.value;
+          localStorage.setItem('dlm_username', username);
+          localStorage.setItem('dlm_user_token', data.token);
+          
+          if (data.account && data.account.settings) {
+            try {
+              const settings = typeof data.account.settings === 'string'
+                ? JSON.parse(data.account.settings) : data.account.settings;
+              if (settings.holidayEnabled !== undefined) localStorage.setItem('dlm_holiday_enabled', settings.holidayEnabled);
+              if (settings.birthday) localStorage.setItem('dlm_birthday', settings.birthday);
+              if (settings.accentColors) {
+                 localStorage.setItem('dlm_accent_colors', settings.accentColors);
+                 if (typeof applyAccent === 'function') applyAccent(JSON.parse(settings.accentColors));
+              }
+            } catch(e) {}
+          }
+          
+          authModal.style.display = 'none';
+          if (typeof showToast === 'function') showToast('Successfully logged in and synced!', 'success');
+          updateGreeting();
+        } else {
+          errorMsg.textContent = data.error || 'Login failed.';
+          errorMsg.style.display = 'block';
+        }
+      } catch (err) {
+        errorMsg.textContent = 'Network error. Make sure server is running.';
+        errorMsg.style.display = 'block';
+      }
+    });
+  }
+
+  if (registerSubmitBtn && authModal) {
+    registerSubmitBtn.addEventListener('click', async () => {
+      const usernameInput = $('registerUsernameInput');
+      const passwordInput = $('registerPasswordInput');
+      const codeInput = $('registerCodeInput');
+      const birthdayInput = $('registerBirthdayInput');
+      const errorMsg = $('registerError');
+
+      if (usernameInput.value.length < 3) {
+        errorMsg.textContent = 'Username must be at least 3 characters.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+      if (passwordInput.value.length < 6) {
+        errorMsg.textContent = 'Password must be at least 6 characters.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+      if (!codeInput.value) {
+        errorMsg.textContent = 'Code from Bot is required.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+
+      try {
+        const payload = {
+          username: usernameInput.value,
+          password: passwordInput.value,
+          pairingCode: codeInput.value,
+          birthday: birthdayInput ? birthdayInput.value : null
+        };
+
+        const res = await fetch(API_BASE_URL.replace(/\/$/, '') + '/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        
+        if (data.status === 'success') {
+          errorMsg.style.display = 'none';
+          localStorage.setItem('dlm_username', data.username);
+          localStorage.setItem('dlm_user_token', data.token);
+          if (payload.birthday) localStorage.setItem('dlm_birthday', payload.birthday);
+          
+          authModal.style.display = 'none';
+          if (typeof showToast === 'function') showToast('Account created and synced!', 'success');
+          updateGreeting();
+          syncSettingsToCloud(); // Push initial settings
+        } else {
+          errorMsg.textContent = data.error || 'Registration failed.';
+          errorMsg.style.display = 'block';
+        }
+      } catch (err) {
+        errorMsg.textContent = 'Network error. Make sure server is running.';
+        errorMsg.style.display = 'block';
+      }
+    });
+  }
+
+  // User Settings Account Management UI
+  const userSettingsLoginBtn = $('userSettingsLoginBtn');
+
+  function updateAccountUI() {
+    const username = localStorage.getItem('dlm_username');
+    const token = localStorage.getItem('dlm_user_token');
+    const iconEl = $('accountSettingsIcon');
+    const descEl = $('accountSettingsDesc');
+    const greetingAvatar = $('greetingAvatar');
+    const birthdayContainer = $('accountBirthdayContainer');
+    const birthdayInput = $('accountBirthdayInput');
+
+    if (username && token) {
+      // Logged in — fetch avatar from server and show logout
+      if (userSettingsLoginBtn) {
+        userSettingsLoginBtn.textContent = 'Log Out';
+        userSettingsLoginBtn.style.background = 'rgba(255,80,80,0.15)';
+        userSettingsLoginBtn.style.borderColor = 'rgba(255,80,80,0.4)';
+        userSettingsLoginBtn.style.color = '#ff6b6b';
+      }
+      if (descEl) descEl.textContent = `Logged in as ${username}. Your settings are synced.`;
+      
+      if (birthdayContainer) birthdayContainer.style.display = 'flex';
+      if (birthdayInput) birthdayInput.value = localStorage.getItem('dlm_birthday') || '';
+      
+      const accountDeletionContainer = $('accountDeletionContainer');
+      if (accountDeletionContainer) accountDeletionContainer.style.display = 'flex';
+
+      // Fetch account info from server to get Discord avatar
+      const savedToken = token;
+      fetch(API_BASE_URL.replace(/\/$/, '') + '/api/user/data', {
+        headers: { 'Authorization': 'Bearer ' + savedToken }
+      }).then(r => r.json()).then(data => {
+        if (data && data.error === 'Banned') {
+           const banOverlay = $('banOverlay');
+           if (banOverlay) {
+             $('banOverlayReason').textContent = `Reason: ${data.reason || 'No reason provided'}`;
+             banOverlay.classList.remove('hidden');
+             banOverlay.classList.add('bb-enter-anim');
+           }
+           localStorage.removeItem('dlm_user_token');
+           localStorage.removeItem('dlm_username');
+           return;
+        }
+
+        const avatarUrl = data && data.discordAvatar ? data.discordAvatar : null;
+        if (avatarUrl && iconEl) {
+          iconEl.innerHTML = `<img src="${avatarUrl}" alt="Avatar" style="width:100%;height:100%;object-fit:cover;border-radius:14px;">` ;
+          iconEl.style.padding = '0';
+          iconEl.style.overflow = 'hidden';
+        }
+        if (avatarUrl && greetingAvatar) {
+          greetingAvatar.src = avatarUrl;
+          greetingAvatar.style.display = 'block';
+        }
+      }).catch(() => {});
+
+    } else {
+      // Logged out — restore defaults
+      if (userSettingsLoginBtn) {
+        userSettingsLoginBtn.textContent = 'Log In / Register';
+        userSettingsLoginBtn.style.background = '';
+        userSettingsLoginBtn.style.borderColor = '';
+        userSettingsLoginBtn.style.color = '';
+      }
+      if (descEl) descEl.textContent = 'Log in or register to sync your settings and favorites.';
+      if (iconEl) {
+        iconEl.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
+        iconEl.style.padding = '';
+        iconEl.style.overflow = '';
+      }
+      if (greetingAvatar) {
+        greetingAvatar.style.display = 'none';
+        greetingAvatar.src = '';
+      }
+      if (birthdayContainer) birthdayContainer.style.display = 'none';
+    }
+  }
+
+  if (userSettingsLoginBtn) {
+    userSettingsLoginBtn.addEventListener('click', () => {
+      const username = localStorage.getItem('dlm_username');
+      if (username) {
+        // Log out
+        localStorage.removeItem('dlm_username');
+        localStorage.removeItem('dlm_user_token');
+        updateAccountUI();
+        if (typeof showToast === 'function') showToast('Logged out successfully.', 'success');
+        updateGreeting();
+      } else {
+        // Open auth modal
+        if (authModal) authModal.style.display = 'flex';
+      }
+    });
+  }
+
+  const deleteAccountBtn = $('deleteAccountBtn');
+  if (deleteAccountBtn) {
+    deleteAccountBtn.addEventListener('click', async () => {
+      const codeInput = $('accountDeletionCode');
+      const code = codeInput.value.trim();
+      if (!code) {
+        showToast('Please enter the 6-digit code from Discord.', 'error');
+        return;
+      }
+
+      if (!confirm('Are you absolutely sure you want to delete your account and all its data? This cannot be undone.')) return;
+
+      const username = localStorage.getItem('dlm_username');
+      try {
+        const res = await fetch(API_BASE_URL.replace(/\/$/, '') + '/api/auth/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, code })
+        });
+        const data = await res.json();
+        // Always clear local session and log out — backend deletes regardless
+        localStorage.removeItem('dlm_user_token');
+        localStorage.removeItem('dlm_username');
+        localStorage.removeItem('dlm_recently_played');
+        localStorage.removeItem('dlm_favorites');
+        localStorage.removeItem('dlm_birthday');
+        updateAccountUI();
+        renderFavorites();
+        renderRecentlyPlayed();
+        updateGreeting();
+        codeInput.value = '';
+      } catch (err) {
+        // Even on network error, log out locally
+        localStorage.removeItem('dlm_user_token');
+        localStorage.removeItem('dlm_username');
+        updateAccountUI();
+        updateGreeting();
+      }
+    });
+  }
+
+  const execBanBtn = $('execBanBtn');
+  if (execBanBtn) {
+    execBanBtn.addEventListener('click', async () => {
+      const pin = $('execPinInput').value.trim();
+      const username = $('execBanUsername').value.trim();
+      const reason = $('execBanReason').value.trim();
+
+      if (!pin || !username || !reason) {
+        showToast('All fields (PIN, Username, Reason) are required to ban.', 'error');
+        return;
+      }
+
+      // Validate PIN client-side using Base64 before hitting the server
+      const EXEC_PIN = 'MTk3MzE5NzU=';
+      if (btoa(pin) !== EXEC_PIN) {
+        showToast('Invalid Executive PIN.', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch(API_BASE_URL.replace(/\/$/, '') + '/api/admin/ban', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: atob(EXEC_PIN), username, reason })
+        });
+        const data = await res.json();
+        
+        if (data.status === 'success') {
+          showToast(`Successfully banned user ${username}.`, 'success');
+          $('execBanUsername').value = '';
+          $('execBanReason').value = '';
+          $('execPinInput').value = '';
+        } else {
+          showToast(`Ban Failed: ${data.error}`, 'error');
+        }
+      } catch (err) {
+        showToast('Network error while executing ban.', 'error');
+      }
+    });
+  }
+
+  const saveAccountBirthdayBtn = $('saveAccountBirthdayBtn');
+  const accountBirthdayInput = $('accountBirthdayInput');
+  if (saveAccountBirthdayBtn && accountBirthdayInput) {
+    saveAccountBirthdayBtn.addEventListener('click', async () => {
+      const newBirthday = accountBirthdayInput.value.trim();
+      const token = localStorage.getItem('dlm_user_token');
+      if (!token) return;
+
+      const oldText = saveAccountBirthdayBtn.textContent;
+      saveAccountBirthdayBtn.textContent = 'Saving...';
+      try {
+        const res = await fetch(API_BASE_URL.replace(/\/$/, '') + '/api/user/birthday', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({ birthday: newBirthday })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          localStorage.setItem('dlm_birthday', newBirthday);
+          if (typeof showToast === 'function') showToast('Birthday updated successfully!', 'success');
+          updateGreeting();
+        } else {
+          if (typeof showToast === 'function') showToast(data.error || 'Failed to update birthday', 'error');
+        }
+      } catch (e) {
+        if (typeof showToast === 'function') showToast('Network error updating birthday', 'error');
+      }
+      saveAccountBirthdayBtn.textContent = oldText;
+    });
+  }
+
+  // Expose so login/register success can refresh the UI
+  window.updateAccountUI = updateAccountUI;
+  updateAccountUI();
   
   if (closeUpdateModalBtn) {
     closeUpdateModalBtn.addEventListener('click', () => {
@@ -1326,6 +1876,7 @@ document.addEventListener('DOMContentLoaded', () => {
       scene.style.backgroundImage = '';
       if (gridOverlay) gridOverlay.style.display = 'none';
       blobs.forEach(b => {
+        b.style.display = 'block';
         b.style.backgroundImage = `url("${image}")`;
         b.style.backgroundSize = 'cover';
         b.style.backgroundPosition = 'center';
@@ -1337,6 +1888,7 @@ document.addEventListener('DOMContentLoaded', () => {
       scene.style.backgroundImage = image ? `url("${image}")` : '';
       if (image) {
         if (gridOverlay) gridOverlay.style.display = 'none'; // hide the white dots grid
+        blobs.forEach(b => b.style.display = 'none'); // Hide blobs
         if (enableGridOnImage) {
            scene.style.backgroundSize = `${100 / parseInt(gridAmount, 10)}vw auto`; // Scale by amount
            scene.style.backgroundRepeat = 'repeat';
@@ -1348,6 +1900,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } else {
         if (gridOverlay) gridOverlay.style.display = 'block'; // show the white dots grid on default anim
+        blobs.forEach(b => b.style.display = 'block'); // Show blobs
         scene.style.backgroundSize = '';
         scene.style.backgroundRepeat = '';
         scene.style.backgroundPosition = '';
@@ -1374,6 +1927,35 @@ document.addEventListener('DOMContentLoaded', () => {
       if (gridSizeValue) gridSizeValue.textContent = e.target.value;
       localStorage.setItem('dlm_image_grid_amount', e.target.value);
       applyLocalBackground(window._currentBgData || '');
+    });
+  }
+
+  // Blob Multiplier Slider
+  const blobMultiplierSlider = $('blobMultiplierSlider');
+  const blobMultiplierValue = $('blobMultiplierValue');
+  if (blobMultiplierSlider) {
+    const val = localStorage.getItem('dlm_blob_multiplier') || '1';
+    blobMultiplierSlider.value = val;
+    if (blobMultiplierValue) blobMultiplierValue.textContent = val + 'x';
+    blobMultiplierSlider.addEventListener('input', (e) => {
+      const v = e.target.value;
+      if (blobMultiplierValue) blobMultiplierValue.textContent = v + 'x';
+      localStorage.setItem('dlm_blob_multiplier', v);
+      updateDynamicBlobs(JSON.parse(localStorage.getItem('dlm_accent_colors') || '["#0084ff","#7300ff"]'));
+    });
+  }
+
+  // Blob Speed Slider
+  const blobSpeedSlider = $('blobSpeedSlider');
+  const blobSpeedValue = $('blobSpeedValue');
+  if (blobSpeedSlider) {
+    const val = localStorage.getItem('dlm_blob_speed') || '1';
+    blobSpeedSlider.value = val;
+    if (blobSpeedValue) blobSpeedValue.textContent = val + 'x';
+    blobSpeedSlider.addEventListener('input', (e) => {
+      const v = e.target.value;
+      if (blobSpeedValue) blobSpeedValue.textContent = v + 'x';
+      localStorage.setItem('dlm_blob_speed', v);
     });
   }
 
@@ -1412,9 +1994,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const bgScene = $('bgScene');
 
   let accentColors = JSON.parse(localStorage.getItem('dlm_accent_colors'));
+  
+  // Wipe cache if it's using the old default gradient so the new one applies!
+  if (accentColors && ((accentColors[0] === '#6366f1' && accentColors[1] === '#8b5cf6') || (accentColors[0] === '#3b82f6' && accentColors[1] === '#7300ff') || (accentColors[0] === '#7b6cf6' && accentColors[1] === '#ff4b8b'))) {
+    accentColors = null;
+    localStorage.removeItem('dlm_accent_colors');
+  }
+
   if (!accentColors || accentColors.length < 2) {
-    const oldStart = localStorage.getItem('dlm_accent_start') || '#6366f1';
-    const oldEnd = localStorage.getItem('dlm_accent_end') || '#8b5cf6';
+    const oldStart = localStorage.getItem('dlm_accent_start') || '#0084ff';
+    const oldEnd = localStorage.getItem('dlm_accent_end') || '#7300ff';
     accentColors = [oldStart, oldEnd];
   }
 
@@ -1429,12 +2018,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (accentPreview) accentPreview.style.background = gradStr;
     localStorage.setItem('dlm_accent_colors', JSON.stringify(colors));
     updateDynamicBlobs(colors);
+    if (typeof window.syncSettingsToCloud === 'function') window.syncSettingsToCloud();
   }
 
   function updateDynamicBlobs(colors) {
     if (!bgScene) return;
     const existingBlobs = bgScene.querySelectorAll('.blob');
-    const numBlobs = colors.length * 2;
+    const multiplier = parseInt(localStorage.getItem('dlm_blob_multiplier') || '1', 10);
+    const numBlobs = colors.length * 2 * multiplier;
     
     if (existingBlobs.length !== numBlobs) {
       // Re-generate blobs if length changed
@@ -1685,7 +2276,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   if (resetAccentBtn) {
     resetAccentBtn.addEventListener('click', () => {
-      accentColors = ['#6366f1', '#8b5cf6'];
+      accentColors = ['#0084ff', '#7300ff'];
       renderAccentPickers(); // Force re-render
       applyAccent(accentColors);
     });
@@ -2064,7 +2655,7 @@ function physicsLoop() {
   
   const blobArray = Array.from(activePhysicsBlobs);
   
-  blobArray.forEach(blob => {
+    blobArray.forEach(blob => {
     if (blob === draggedBlob) return; // don't move while dragged
 
     // maintain baseline speed
@@ -2081,8 +2672,9 @@ function physicsLoop() {
       blob._vy = (Math.random() - 0.5) * baseline;
     }
     
-    blob._tx += blob._vx;
-    blob._ty += blob._vy;
+    const speedMulti = parseFloat(localStorage.getItem('dlm_blob_speed') || '1');
+    blob._tx += blob._vx * speedMulti;
+    blob._ty += blob._vy * speedMulti;
     
     // bounding box logic against window edges
     const rect = blob.getBoundingClientRect();

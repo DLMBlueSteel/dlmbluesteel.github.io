@@ -9,11 +9,11 @@
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-hover:  rgba(255, 255, 255, 0.07);
 
-  --accent-1:     #6366f1;
-  --accent-2:     #8b5cf6;
-  --accent-3:     #06b6d4;
-  --accent-grad:  linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4);
-  --accent-glow:  rgba(99, 102, 241, 0.4);
+  --accent-1:     #3b82f6;
+  --accent-2:     #7300ff;
+  --accent-3:     #7300ff;
+  --accent-grad:  linear-gradient(135deg, #3b82f6, #7300ff);
+  --accent-glow:  rgba(59, 130, 246, 0.4);
 
   --text-primary:   #f0f0ff;
   --text-secondary: rgba(240,240,255,0.55);
@@ -1650,7 +1650,6 @@ select.settings-input option {
 
 .pin-dot.filled {
   background: var(--accent-grad);
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
   border-color: transparent;
   box-shadow: 0 0 10px rgba(99,102,241,0.5);
   transform: scale(1.15);
