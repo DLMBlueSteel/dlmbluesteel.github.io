@@ -3,11 +3,11 @@
    ============================================== */
 'use strict';
 // Force update default API URL to the new one
-if (localStorage.getItem('dlm_api_url_migrated_v5') !== 'true') {
-  localStorage.setItem('dlm_api_url', 'https://releases-offering-tone-stage.trycloudflare.com');
-  localStorage.setItem('dlm_api_url_migrated_v5', 'true');
+if (localStorage.getItem('dlm_api_url_migrated_v4') !== 'true') {
+  localStorage.setItem('dlm_api_url', 'https://specially-mark-hire-allan.trycloudflare.com');
+  localStorage.setItem('dlm_api_url_migrated_v4', 'true');
 }
-let API_BASE_URL    = localStorage.getItem('dlm_api_url') || 'https://releases-offering-tone-stage.trycloudflare.com';
+let API_BASE_URL    = localStorage.getItem('dlm_api_url') || 'https://specially-mark-hire-allan.trycloudflare.com';
 let selectedGuildId = null;
 let nowPlayingData  = null;
 let queueData       = [];
@@ -1336,24 +1336,35 @@ document.addEventListener('DOMContentLoaded', () => {
           if (data.account && data.account.settings) {
             try {
               const settings = typeof data.account.settings === 'string'
-                ? JSON.parse(data.account.settings) : data.account.settings;
-              if (settings.holidayEnabled !== undefined) localStorage.setItem('dlm_holiday_enabled', settings.holidayEnabled);
+                ? JSON.parse(data.account.settings) : data.account.settings || {};
+
+              if (settings.holidayEnabled !== undefined) {
+                localStorage.setItem('dlm_holiday_enabled', settings.holidayEnabled ? 'true' : 'false');
+              }
               if (settings.birthday) localStorage.setItem('dlm_birthday', settings.birthday);
+
               if (settings.accentColors) {
-                 localStorage.setItem('dlm_accent_colors', settings.accentColors);
-                 if (typeof applyAccent === 'function') applyAccent(JSON.parse(settings.accentColors));
+                 const ac = typeof settings.accentColors === 'string' ? settings.accentColors : JSON.stringify(settings.accentColors);
+                 localStorage.setItem('dlm_accent_colors', ac);
+                 if (typeof applyAccent === 'function') {
+                   try { applyAccent(JSON.parse(ac)); } catch (_) {}
+                 }
               }
+
               if (settings.recentlyPlayed) {
-                 localStorage.setItem('dlm_recently_played', settings.recentlyPlayed);
-                 try { recentlyPlayed = JSON.parse(settings.recentlyPlayed); } catch(e){}
-                 if (typeof renderRecentQueue === 'function') renderRecentQueue();
+                 const rp = typeof settings.recentlyPlayed === 'string' ? settings.recentlyPlayed : JSON.stringify(settings.recentlyPlayed);
+                 localStorage.setItem('dlm_recently_played', rp);
+                 try { recentlyPlayed = JSON.parse(rp); } catch(e){ recentlyPlayed = []; }
+                 if (typeof renderRecentlyPlayed === 'function') renderRecentlyPlayed();
               }
+
               if (settings.favorites) {
-                 localStorage.setItem('dlm_favorites', settings.favorites);
-                 try { favorites = JSON.parse(settings.favorites); } catch(e){}
+                 const fv = typeof settings.favorites === 'string' ? settings.favorites : JSON.stringify(settings.favorites);
+                 localStorage.setItem('dlm_favorites', fv);
+                 try { favorites = JSON.parse(fv); } catch(e){ favorites = []; }
                  if (typeof renderFavorites === 'function') renderFavorites();
               }
-            } catch(e) {}
+            } catch(e) { console.error('Failed to apply account settings:', e); }
           }
           
           authModal.style.display = 'none';
