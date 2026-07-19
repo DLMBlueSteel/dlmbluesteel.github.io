@@ -1039,9 +1039,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // Onboarding System
   const onboardingCompleted = localStorage.getItem('dlm_onboarding_completed') === 'true';
   const onboardingModal = $('onboardingModal');
+
+  // Sync Account Prompt for returning logged-out users
+  if (onboardingCompleted && !localStorage.getItem('dlm_user_token') && !sessionStorage.getItem('dlm_sync_toast_seen')) {
+    setTimeout(() => {
+      showToast('Want to Sync your Account with other Devices? Go to User Settings to Register!', 'info');
+      sessionStorage.setItem('dlm_sync_toast_seen', 'true');
+    }, 2500); // Show it 2.5s after load so they notice it
+  }
   
   // Update Log Modal v2.2
-  const updateLogSeen = localStorage.getItem('v2.2_update_seen');
+  const updateLogSeen = localStorage.getItem('v2.3_update_seen') === 'true';
   const updateLogModal = $('updateLogModal');
   const closeUpdateModalBtn = $('closeUpdateModalBtn');
   const playCelebrationBtn = $('playCelebrationBtn');
@@ -1073,14 +1081,17 @@ document.addEventListener('DOMContentLoaded', () => {
     $('obFinishBtn').addEventListener('click', () => {
       localStorage.setItem('dlm_onboarding_completed', 'true');
       onboardingModal.style.display = 'none';
-      if (!updateLogSeen && updateLogModal) {
+      if (updateLogModal) {
+        const intro = $('updateLogIntro');
+        if (intro) intro.textContent = "You joined at the best time! Here's what's new in this update:";
         updateLogModal.style.display = 'flex';
-        localStorage.setItem('v2.2_update_seen', 'true');
+        localStorage.setItem('v2.3_update_seen', 'true');
       }
     });
-  } else if (!updateLogSeen && updateLogModal) {
+  } else if (onboardingCompleted && !updateLogSeen && updateLogModal) {
+    // Only show update log to returning users who've already done onboarding
     updateLogModal.style.display = 'flex';
-    localStorage.setItem('v2.2_update_seen', 'true');
+    localStorage.setItem('v2.3_update_seen', 'true');
   }
 
   // Auth System Logic
@@ -1602,6 +1613,12 @@ document.addEventListener('DOMContentLoaded', () => {
       updateLogModal.style.display = 'none';
     });
   }
+  const closeUpdateModalBtn2 = $('closeUpdateModalBtn2');
+  if (closeUpdateModalBtn2) {
+    closeUpdateModalBtn2.addEventListener('click', () => {
+      updateLogModal.style.display = 'none';
+    });
+  }
   
   if (playCelebrationBtn) {
     playCelebrationBtn.addEventListener('click', async () => {
@@ -1622,7 +1639,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const regenUpdateLogBtn = $('regenUpdateLogBtn');
   if (regenUpdateLogBtn) {
     regenUpdateLogBtn.addEventListener('click', () => {
-      localStorage.removeItem('v2.2_update_seen');
+      localStorage.removeItem('v2.3_update_seen');
       location.reload();
     });
   }

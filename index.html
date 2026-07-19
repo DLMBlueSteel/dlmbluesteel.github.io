@@ -641,7 +641,7 @@
               <h3>About</h3>
               <p class="settings-desc">DLM BlueSteel Player Web Dashboard</p>
               <div class="about-info">
-                <span class="badge badge-outline">v2.2</span>
+                <span class="badge badge-outline">v2.3</span>
                 <span class="badge badge-outline">Built with ♥</span>
               </div>
             </div>
@@ -792,7 +792,7 @@
             <!-- Muted icon (hidden by default) -->
             <svg id="volIconMute" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
           </button>
-          <input type="range" class="vol-slider" id="bbVolumeSlider" min="0" max="100" step="1" value="100" title="Volume" />
+          <input type="range" class="vol-slider" id="bbVolumeSlider" min="0" max="150" step="1" value="100" title="Volume" />
           <span class="fc-val" id="bbVolumeVal">100%</span>
         </div>
         <div class="effects-wrap" style="margin-left: 12px; border-left: 1px solid rgba(255,255,255,0.08); padding-left: 14px;">
@@ -918,20 +918,35 @@
   <script src="app.js?v=4" defer></script>
   <!-- Update Log Modal -->
   <div id="updateLogModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 9999; justify-content: center; align-items: center;">
-    <div class="glass-card" style="max-width: 500px; width: 90%; padding: 30px; border-radius: 16px; position: relative; animation: popupEnter 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards;">
+    <div class="glass-card" style="max-width: 520px; width: 90%; padding: 30px; border-radius: 16px; position: relative; animation: popupEnter 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards;">
       <button id="closeUpdateModalBtn" style="position: absolute; top: 15px; right: 15px; background: none; border: none; color: var(--text-secondary); cursor: pointer;">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
-      <h2 style="margin-top: 0; margin-bottom: 15px; font-size: 24px;">Welcome to DLM BlueSteel Player v2.2!</h2>
-      <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 20px;">
-        We're incredibly excited to bring you the biggest and best version of the player yet! 
-        Because we're finally adding this to GitHub Pages, we wanted to make it special.
-        <br><br>
-        There are 3 new cool Easter Eggs! Find them if you can!
-      </p>
-      <button id="playCelebrationBtn" class="gradient-btn" style="width: 100%; padding: 12px; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        Play CELEBRATION by LE SSERAFIM
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 18px;">
+        <span style="background: linear-gradient(135deg, var(--accent-1), var(--accent-2)); padding: 5px 12px; border-radius: 20px; font-size: 13px; font-weight: 700; color: #fff;">v2.3</span>
+        <h2 style="margin: 0; font-size: 22px;">DLM BlueSteel Player</h2>
+      </div>
+      <p id="updateLogIntro" style="color: var(--text-secondary); font-size: 14px; margin-bottom: 18px; line-height: 1.5;">Here's what's new in this update:</p>
+      <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px;">
+        <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 12px 15px; border-left: 3px solid var(--accent-1);">
+          <div style="font-weight: 600; font-size: 14px; margin-bottom: 3px;">Account Deletion</div>
+          <div style="font-size: 13px; color: var(--text-secondary);">Run !webdelete on Discord, enter your code on the site and your account and all data is permanently wiped.</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 12px 15px; border-left: 3px solid var(--accent-2);">
+          <div style="font-weight: 600; font-size: 14px; margin-bottom: 3px;">Executive Ban System</div>
+          <div style="font-size: 13px; color: var(--text-secondary);">Executives can now ban users from Admin Settings. Banned users see a permanent overlay explaining the reason.</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 12px 15px; border-left: 3px solid var(--accent-3);">
+          <div style="font-weight: 600; font-size: 14px; margin-bottom: 3px;">Smarter Greetings</div>
+          <div style="font-size: 13px; color: var(--text-secondary);">The greeting now only shows when you're logged in and has been improved with more variety.</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.04); border-radius: 10px; padding: 12px 15px; border-left: 3px solid var(--accent-4);">
+          <div style="font-weight: 600; font-size: 14px; margin-bottom: 3px;">Bot Rebranded to 0.7.0</div>
+          <div style="font-size: 13px; color: var(--text-secondary);">DLM BlueSteel bot is now officially version 0.7.0 with all backend improvements included.</div>
+        </div>
+      </div>
+      <button id="closeUpdateModalBtn2" class="gradient-btn" style="width: 100%; padding: 12px; font-size: 15px; display: flex; align-items: center; justify-content: center;">
+        Let's go!
       </button>
     </div>
   </div>
