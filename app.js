@@ -274,6 +274,7 @@ function updateRecentlyPlayed(np) {
   // Remove entries older than 7 days and cap at 50
   recentlyPlayed = recentlyPlayed.filter(t => Date.now() - t.timestamp < SEVEN_DAYS_MS).slice(0, 50);
   localStorage.setItem('dlm_recently_played', JSON.stringify(recentlyPlayed));
+  if (typeof window.syncSettingsToCloud === 'function') window.syncSettingsToCloud();
   renderRecentlyPlayed();
 }
 function renderRecentlyPlayed() {
@@ -311,6 +312,7 @@ function renderRecentlyPlayed() {
         const idx = parseInt(e.target.closest('.remove-recent-btn').dataset.index, 10);
         recentlyPlayed.splice(idx, 1);
         localStorage.setItem('dlm_recently_played', JSON.stringify(recentlyPlayed));
+        if (typeof window.syncSettingsToCloud === 'function') window.syncSettingsToCloud();
         renderRecentlyPlayed();
         return;
       }
@@ -348,6 +350,7 @@ function renderFavorites() {
       const idx = Number(e.target.closest('.fav-remove').dataset.index);
       favorites.splice(idx, 1);
       localStorage.setItem('dlm_favorites', JSON.stringify(favorites));
+      if (typeof window.syncSettingsToCloud === 'function') window.syncSettingsToCloud();
       renderFavorites();
       updateFavoriteButton();
       return;
@@ -368,6 +371,7 @@ function toggleFavorite() {
     showToast('Added to favorites', 'success');
   }
   localStorage.setItem('dlm_favorites', JSON.stringify(favorites));
+  if (typeof window.syncSettingsToCloud === 'function') window.syncSettingsToCloud();
   renderFavorites();
   updateFavoriteButton();
 }
@@ -1250,13 +1254,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const settings = {
       holidayEnabled: localStorage.getItem('dlm_holiday_enabled'),
       birthday: localStorage.getItem('dlm_birthday'),
-      accentColors: localStorage.getItem('dlm_accent_colors')
+      accentColors: localStorage.getItem('dlm_accent_colors'),
+      recentlyPlayed: localStorage.getItem('dlm_recently_played'),
+      favorites: localStorage.getItem('dlm_favorites')
     };
 
-    fetch(API_BASE_URL.replace(/\/$/, '') + '/api/user/sync', {
+    fetch(API_BASE_URL.replace(/\/$/, '') + '/api/user/data', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, token, settings })
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify(settings)
     }).then(res => res.json()).then(data => {
       if (data.status === 'success') {
         console.log('Settings successfully synced to cloud.');
@@ -1314,6 +1323,16 @@ document.addEventListener('DOMContentLoaded', () => {
               if (settings.accentColors) {
                  localStorage.setItem('dlm_accent_colors', settings.accentColors);
                  if (typeof applyAccent === 'function') applyAccent(JSON.parse(settings.accentColors));
+              }
+              if (settings.recentlyPlayed) {
+                 localStorage.setItem('dlm_recently_played', settings.recentlyPlayed);
+                 try { recentlyPlayed = JSON.parse(settings.recentlyPlayed); } catch(e){}
+                 if (typeof renderRecentQueue === 'function') renderRecentQueue();
+              }
+              if (settings.favorites) {
+                 localStorage.setItem('dlm_favorites', settings.favorites);
+                 try { favorites = JSON.parse(settings.favorites); } catch(e){}
+                 if (typeof renderFavorites === 'function') renderFavorites();
               }
             } catch(e) {}
           }
@@ -2603,6 +2622,7 @@ document.addEventListener('DOMContentLoaded', () => {
     clearRecentBtn.addEventListener('click', () => {
       recentlyPlayed = [];
       localStorage.setItem('dlm_recently_played', JSON.stringify([]));
+      if (typeof window.syncSettingsToCloud === 'function') window.syncSettingsToCloud();
       renderRecentlyPlayed();
       showToast('Recently Played history cleared 🗑️', 'info');
     });
