@@ -16,7 +16,22 @@ let npTimer         = null;
 let queueTimer      = null;
 let searchDebounce  = null;
 let selectedSearchResult = null; // { url, title }
-// ─── Volume and Mute State ──────────────────────
+
+// --- Firebase Cloud Bridge Initialization ---
+const firebaseConfig = {
+  apiKey: "AIzaSyBfwcGysmxoTMObWyu4ZOya_Gelsf0X24s",
+  authDomain: "dlm-bluesteel.firebaseapp.com",
+  databaseURL: "https://dlm-bluesteel-default-rtdb.firebaseio.com",
+  projectId: "dlm-bluesteel",
+  storageBucket: "dlm-bluesteel.firebasestorage.app",
+  messagingSenderId: "747973164451",
+  appId: "1:747973164451:web:037c9c84b128493ca4ae16",
+  measurementId: "G-XJN9HB63WT"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+// --------------------------------------------
+// â”€â”€â”€ Volume and Mute State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let currentVolume   = 100;
 let isMuted         = false;
 let preMuteVolume   = 100;
@@ -46,31 +61,52 @@ function updateVolumeButtons() {
 async function sendVolumeChange(vol) {
   if (!selectedGuildId) return;
   try {
-    await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/volume?guildId=${selectedGuildId}&val=${vol}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
+    await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/volume-guildId=${selectedGuildId}&val=${vol}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
   } catch (err) { console.error(err); }
 }
-// ─── DOM ────────────────────────────────────────
+// â”€â”€â”€ DOM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const $ = id => document.getElementById(id);
-// ─── Fetch ──────────────────────────────────────
+// â”€â”€â”€ Firebase Cloud Bridge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function apiFetch(path, opts = {}) {
-  const url = API_BASE_URL.replace(/\/$/, '') + path;
-  const res = await fetch(url, {
-    ...opts,
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-      ...(opts.headers || {}),
-    },
+  const reqId = Date.now() + "_" + Math.random().toString(36).substring(2);
+  const method = opts.method || 'GET';
+  const body = opts.body || null;
+  
+  return new Promise((resolve, reject) => {
+    // 1. Listen for the response first
+    const resRef = db.ref('responses/' + reqId);
+    resRef.on('value', snap => {
+      const val = snap.val();
+      if (val) {
+        resRef.off();
+        db.ref('responses/' + reqId).remove(); // Cleanup
+        if (val.error) {
+          reject(new Error(val.error));
+        } else {
+          try {
+            resolve(JSON.parse(val.data));
+          } catch (e) {
+            resolve(val.data); // If it's not JSON, return raw text
+          }
+        }
+      }
+    });
+    
+    // 2. Push the request to the bot
+    db.ref('requests/' + reqId).set({
+      path: path,
+      method: method,
+      body: body
+    });
+    
+    // 3. Timeout after 15 seconds
+    setTimeout(() => {
+      resRef.off();
+      reject(new Error("Bot did not respond in time! Is it running?"));
+    }, 15000);
   });
-  const text = await res.text();
-  if (!res.ok) {
-    let msg = `HTTP ${res.status}`;
-    try { const j = JSON.parse(text); if (j.error) msg = j.error; } catch (_) {}
-    throw new Error(msg);
-  }
-  return text ? JSON.parse(text) : null;
 }
-// ─── Connection Status ──────────────────────────
+// â”€â”€â”€ Connection Status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function setOnline(online) {
   if (isOnline === online) return;
   isOnline = online;
@@ -86,7 +122,7 @@ function setOnline(online) {
   }
   refreshButtonStates();
 }
-// ─── Polling ────────────────────────────────────
+// â”€â”€â”€ Polling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function startPolling() {
   stopPolling();
   pollNowPlaying();
@@ -101,7 +137,7 @@ function stopPolling() {
 async function pollNowPlaying() {
   if (!selectedGuildId) return;
   try {
-    const data = await apiFetch(`/api/now-playing?guildId=${selectedGuildId}`);
+    const data = await apiFetch(`/api/now-playing-guildId=${selectedGuildId}`);
     setOnline(true);
     updateNowPlaying(data);
   } catch {
@@ -112,7 +148,7 @@ async function pollNowPlaying() {
 async function pollQueue() {
   if (!selectedGuildId) return;
   try {
-    const data = await apiFetch(`/api/queue?guildId=${selectedGuildId}`);
+    const data = await apiFetch(`/api/queue-guildId=${selectedGuildId}`);
     setOnline(true);
     queueData = Array.isArray(data) ? data : [];
     renderQueue();
@@ -120,7 +156,7 @@ async function pollQueue() {
     setOnline(false);
   }
 }
-// ─── Guilds ─────────────────────────────────────
+// â”€â”€â”€ Guilds â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function loadGuilds() {
   const sel = $('guildSelect');
   sel.innerHTML = '<option value="">Loading...</option>';
@@ -147,7 +183,7 @@ async function loadGuilds() {
     showToast('Cannot connect to bot — check the API URL in Settings', 'error');
   }
 }
-// ─── Now Playing ────────────────────────────────
+// â”€â”€â”€ Now Playing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function updateNowPlaying(np) {
   nowPlayingData = np;
   const title       = $('npTitle');
@@ -237,7 +273,7 @@ function updateNowPlaying(np) {
   }
   refreshButtonStates();
 }
-// ─── Recently Played ─────────────────────────────
+// â”€â”€â”€ Recently Played â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 function isMp3Track(track) {
   const url = String((track && track.url) || '').toLowerCase();
@@ -298,7 +334,7 @@ function renderRecentlyPlayed() {
           </div>
         </div>
         <span class="recent-time-badge">${timeAgo(track.timestamp)}</span>
-        <div class="recent-info">
+        <div class="recent-inf✓>
           <div class="recent-title">${esc(track.title)}</div>
         </div>
       </div>
@@ -326,7 +362,7 @@ function renderRecentlyPlayed() {
     });
   });
 }
-// ─── Favorites (stored locally for this dashboard) ────────────────────────
+// â”€â”€â”€ Favorites (stored locally for this dashboard) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let favorites = JSON.parse(localStorage.getItem('dlm_favorites') || '[]');
 function isFavorite(track) {
   return !!track && favorites.some(f => f.url && f.url === track.url);
@@ -341,8 +377,8 @@ function renderFavorites() {
   container.innerHTML = favorites.map((track, i) => `
     <div class="recent-card" data-index="${i}">
       <button class="remove-recent-btn fav-remove" data-index="${i}" title="Remove from favorites">&times;</button>
-      <div class="recent-art">${track.thumbnail ? `<img src="${esc(track.thumbnail)}" alt="" />` : ''}<div class="recent-play-hover">▶</div></div>
-      <div class="recent-info"><div class="recent-title">${esc(track.title || 'Unknown')}</div></div>
+      <div class="recent-art">${track.thumbnail ? `<img src="${esc(track.thumbnail)}" alt="" />` : ''}<div class="recent-play-hover">â–¶</div></div>
+      <div class="recent-inf✓><div class="recent-title">${esc(track.title || 'Unknown')}</div></div>
     </div>`).join('');
   container.querySelectorAll('.recent-card').forEach(card => card.addEventListener('click', (e) => {
     if (e.target.closest('.fav-remove')) {
@@ -399,7 +435,7 @@ function refreshButtonStates() {
   $('clearQueueBtn').disabled = !hasGuild;
   $('quickAddBtn').disabled  = !hasGuild;
 }
-// ─── Queue Render ────────────────────────────────
+// â”€â”€â”€ Queue Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderQueue() {
   const list  = $('queueList');
   const count = $('queueCount');
@@ -415,14 +451,14 @@ function renderQueue() {
   } else {
   list.innerHTML = queueData.map((track, i) => `
     <div class="queue-item" data-index="${i}" draggable="true">
-      <span class="queue-drag-handle" title="Drag to reorder">☰</span>
+      <span class="queue-drag-handle" title="Drag to reorder">â˜°</span>
       <span class="queue-index">${i + 1}</span>
       <div class="queue-thumb">
         ${track.thumbnail
           ? `<img src="${esc(track.thumbnail)}" alt="" loading="lazy" />`
           : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`}
       </div>
-      <div class="queue-info">
+      <div class="queue-inf✓>
         <div class="queue-title">${esc(track.title || 'Unknown')}</div>
         <div class="queue-duration">${esc(track.duration || '')}</div>
       </div>
@@ -481,7 +517,7 @@ function renderQueue() {
               ? `<img src="${esc(track.thumbnail)}" alt="" loading="lazy" />`
               : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`}
           </div>
-          <div class="queue-info-small">
+          <div class="queue-inf❌small">
             <div class="queue-title-small">${esc(track.title || 'Unknown')}</div>
             <div class="queue-duration-small">${esc(track.duration || '')}</div>
           </div>
@@ -503,7 +539,7 @@ function renderQueue() {
     if (viewAll) viewAll.style.display = queueData.length > 5 ? 'block' : 'none';
   }
 }
-// ─── Controls ───────────────────────────────────
+// â”€â”€â”€ Controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function handlePlayPause() {
   if (!selectedGuildId || !nowPlayingData) return;
   $('btnPlayPause').disabled = true;
@@ -519,11 +555,11 @@ async function handlePlayPause() {
     if (nowPlayingData.paused) {
       iPlay.style.display = ''; iPause.style.display = 'none';
       viz.classList.remove('active'); art.classList.remove('playing');
-      showToast('Paused ⏸', 'info');
+      showToast('Paused â¸', 'info');
     } else {
       iPlay.style.display = 'none'; iPause.style.display = '';
       viz.classList.add('active'); art.classList.add('playing');
-      showToast('Playing ▶', 'info');
+      showToast('Playing â–¶', 'info');
     }
     
     // Optimistic update for bottom bar
@@ -549,7 +585,7 @@ async function handleSkip() {
   $('btnSkip').disabled = true;
   try {
     await apiFetch('/api/queue/skip', { method: 'POST', body: JSON.stringify({ guildId: selectedGuildId }) });
-    showToast('Skipped ⏭', 'success');
+    showToast('Skipped â­', 'success');
     setTimeout(() => { pollNowPlaying(); pollQueue(); }, 500);
   } catch (err) {
     showToast('Skip failed: ' + err.message, 'error');
@@ -562,7 +598,7 @@ async function handleStop() {
   $('btnStop').disabled = true;
   try {
     await apiFetch('/api/queue/stop', { method: 'POST', body: JSON.stringify({ guildId: selectedGuildId }) });
-    showToast('Stopped ⏹', 'info');
+    showToast('Stopped â¹', 'info');
     nowPlayingData = null;
     queueData = [];
     updateNowPlaying(null);
@@ -578,7 +614,7 @@ async function handleClearQueue() {
   $('clearQueueBtn').disabled = true;
   try {
     await apiFetch('/api/queue/clear', { method: 'POST', body: JSON.stringify({ guildId: selectedGuildId }) });
-    showToast('Queue cleared 🗑️', 'info');
+    showToast('Queue cleared ðŸ—‘ï¸', 'info');
     queueData = [];
     renderQueue();
   } catch (err) {
@@ -590,8 +626,8 @@ async function handleClearQueue() {
 async function handleShuffle() {
   if (!selectedGuildId) return;
   try {
-    const data = await apiFetch(`/api/queue/shuffle?guildId=${selectedGuildId}`, { method: 'POST' });
-    showToast(`Shuffled ${data.count || 0} songs 🔀`, 'success');
+    const data = await apiFetch(`/api/queue/shuffle-guildId=${selectedGuildId}`, { method: 'POST' });
+    showToast(`Shuffled ${data.count || 0} songs ðŸ”€`, 'success');
     setTimeout(() => { pollNowPlaying(); pollQueue(); }, 500);
   } catch (err) {
     showToast('Shuffle failed: ' + err.message, 'error');
@@ -629,21 +665,21 @@ async function addSong(queryOrUrl, statusEl, inputEl, btnEl) {
     if (inputEl)  inputEl.value = '';
     if (statusEl) {
       statusEl.className   = 'add-status success';
-      statusEl.textContent = '✓ Added to queue!';
+      statusEl.textContent = 'âœ“ Added to queue!';
       setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'add-status'; }, 3000);
     }
-    showToast('Added to queue 🎵', 'success');
+    showToast('Added to queue ðŸŽµ', 'success');
     setTimeout(pollQueue, 800);
     return true;
   } catch (err) {
-    if (statusEl) { statusEl.className = 'add-status error'; statusEl.textContent = '✗ ' + err.message; }
+    if (statusEl) { statusEl.className = 'add-status error'; statusEl.textContent = 'âœ— ' + err.message; }
     showToast('Add failed: ' + err.message, 'error');
     return false;
   } finally {
     if (btnEl) btnEl.disabled = !selectedGuildId;
   }
 }
-// ─── YouTube Search ──────────────────────────────
+// â”€â”€â”€ YouTube Search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function triggerTadcEasterEgg() {
     // We create a custom toast so we can easily inject Kinger inside it
     const container = $('toastContainer');
@@ -653,7 +689,7 @@ async function addSong(queryOrUrl, statusEl, inputEl, btnEl) {
     toast.className = 'toast success';
     toast.style.position = 'relative'; 
     toast.style.overflow = 'visible'; 
-    toast.innerHTML = `<span class="toast-dot"></span><span style="z-index: 2; position: relative;">Watch TADC anywhere! Visit: <a href="https://wackytadc.github.io" target="_blank" style="color: var(--accent-1); text-decoration: underline; font-weight: bold;">wackytadc.github.io</a></span>`;
+    toast.innerHTML = `<span class="toast-dot"></span><span style="z-index: 2; position: relative;">Watch TADC anywhere! Visit: <a href="https://wackytadc.github.i✓ target="_blank" style="color: var(--accent-1); text-decoration: underline; font-weight: bold;">wackytadc.github.io</a></span>`;
     
     container.appendChild(toast);
     
@@ -692,12 +728,12 @@ async function doSearch(query, pure = false) {
   selectedSearchResult      = null;
   try {
     const results = await apiFetch(
-      `/api/search?q=${encodeURIComponent(query)}&guildId=${selectedGuildId || ''}&pure=${pure}`
+      `/api/search-q=${encodeURIComponent(query)}&guildId=${selectedGuildId || ''}&pure=${pure}`
     );
     spinner.classList.remove('spinning');
     if (!results || results.length === 0) {
       resultsEl.style.display = 'block';
-      resultsEl.innerHTML     = `<div class="search-no-results">No results found for "${esc(query)}"</div>`;
+      resultsEl.innerHTML     = `<div class="search-n❌results">No results found for "${esc(query)}"</div>`;
       return;
     }
     
@@ -728,7 +764,7 @@ async function doSearch(query, pure = false) {
             ? `<img src="${esc(r.thumbnail)}" alt="" loading="lazy" />`
             : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`}
         </div>
-        <div class="sr-info">
+        <div class="sr-inf✓>
           <div class="sr-title">${esc(r.title)}</div>
           <div class="sr-duration">${esc(r.duration)}</div>
         </div>
@@ -783,14 +819,14 @@ async function doSearch(query, pure = false) {
 
     // Wire up result items
     resultsEl.querySelectorAll('.search-result-item').forEach(item => {
-      // Click row → select it
+      // Click row â†’ select it
       item.addEventListener('click', e => {
         if (e.target.closest('.sr-add-btn')) return; // handled below
         resultsEl.querySelectorAll('.search-result-item').forEach(i => i.classList.remove('selected'));
         item.classList.add('selected');
         selectedSearchResult = { url: item.dataset.url, title: item.dataset.title };
       });
-      // Click + button → add directly
+      // Click + button â†’ add directly
       item.querySelector('.sr-add-btn').addEventListener('click', async e => {
         e.stopPropagation();
         const btn = e.currentTarget;
@@ -801,7 +837,7 @@ async function doSearch(query, pure = false) {
         btn.disabled = false;
       });
     });
-    // Auto-select first
+    // Aut❌select first
     const first = resultsEl.querySelector('.search-result-item');
     if (first) {
       first.classList.add('selected');
@@ -810,13 +846,10 @@ async function doSearch(query, pure = false) {
   } catch (err) {
     spinner.classList.remove('spinning');
     resultsEl.style.display = 'block';
-    resultsEl.innerHTML     = `<div class="search-no-results">Search failed: ${esc(err.message)}</div>`;
+    resultsEl.innerHTML     = `<div class="search-n❌results">Search failed: ${esc(err.message)}</div>`;
   }
 }
-// ─── PIN Lock ───────────────────────────────────
-const PIN_CORRECT    = 'MTk3Mw==';
-const PIN_MGMT       = 'MTIwMTk1';
-const PIN_PUZZLE_ANS = 'QTFCMkMz';
+// â”€â”€â”€ PIN Lock â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const ROBOT_MS       = 80;   // keystroke gap below this = suspicious
 let pinUnlocked     = false;   // stays true until page reload
 let pinBuf          = '';      // current digits entered
@@ -919,47 +952,52 @@ function pressDigit(d) {
   }
 }
 
-function checkPin() {
-  if (pinBuf === '8008' && localStorage.getItem('dlm_image_blobs_enabled') === 'true') {
-    localStorage.removeItem('dlm_image_blobs_enabled');
-    closePinOverlay();
-    pinBuf = '';
-    pinKeytimes = [];
-    showToast('Easter Egg Deactivated. Reloading...', 'info');
-    setTimeout(() => window.location.reload(), 500);
-    return;
-  }
-
-  if (btoa(pinBuf) === PIN_CORRECT) {
-    // Correct!
-    pinUnlocked = true;
-    closePinOverlay();
-    pinAttempts = 0;
-    setView('settings');
-    showToast('Settings unlocked ✓', 'success');
-  } else {
-    // Wrong
-    pinAttempts++;
-    flashErrorDots();
-    shakePinBox();
-    pinBuf = '';
-    pinKeytimes = [];
-    if (pinAttempts >= 3) {
-      const banTime = Date.now() + 60 * 60 * 1000; // 1 hour
-      localStorage.setItem('dlm_exec_ban_until', banTime.toString());
-      pinAttempts = 0;
-      showToast('3 wrong PINs! Settings BANNED for 1 hour.', 'error');
-      pinUnlocked = false;
+async function checkPin() {
+    if (pinBuf === '8008' && localStorage.getItem('dlm_image_blobs_enabled') === 'true') {
+      localStorage.removeItem('dlm_image_blobs_enabled');
       closePinOverlay();
-      setView('player');
-      alert('You have entered the wrong PIN 3 times.\nSettings access is now BANNED for 1 hour.\nOnly the Executive PIN can unlock it early.');
-    } else {
-      const rem = 3 - pinAttempts;
-      $('pinAttempts').textContent = `Incorrect PIN — ${rem} attempt${rem !== 1 ? 's' : ''} remaining`;
-      setTimeout(updateDots, 700);
+      pinBuf = '';
+      pinKeytimes = [];
+      showToast('Easter Egg Deactivated. Reloading...', 'info');
+      setTimeout(() => window.location.reload(), 500);
+      return;
+    }
+  
+    try {
+      const res = await fetch(API_BASE_URL + '/api/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'general', pin: pinBuf })
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        // Correct!
+        pinUnlocked = true;
+        closePinOverlay();
+        pinAttempts = 0;
+        setView('settings');
+        showToast('Settings unlocked ðŸ”“', 'success');
+      } else {
+        // Wrong
+        pinAttempts++;
+        flashErrorDots();
+        shakePinBox();
+        pinBuf = '';
+        pinKeytimes = [];
+        if (pinAttempts >= 3) {
+          showToast('Too many wrong attempts', 'error');
+          closePinOverlay();
+        }
+      }
+    } catch(e) {
+      showToast('Failed to verify PIN with server', 'error');
+      pinBuf = '';
+      updateDots();
     }
   }
-}// Navigation
+
+// Navigation
 function setView(name) {
   document.querySelectorAll('.view').forEach(v => {
     v.classList.remove('active');
@@ -1009,7 +1047,7 @@ function setView(name) {
       }
     }
 }
-// ─── Toast ──────────────────────────────────────
+// â”€â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function showToast(message, type = 'info') {
   const container = $('toastContainer');
   const toast = document.createElement('div');
@@ -1021,7 +1059,7 @@ function showToast(message, type = 'info') {
     toast.addEventListener('animationend', () => toast.remove(), { once: true });
   }, 3500);
 }
-// ─── Utils ──────────────────────────────────────
+// â”€â”€â”€ Utils â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function esc(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1679,27 +1717,32 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // Validate PIN client-side using Base64 before hitting the server
-      const EXEC_PIN = 'MTk3MzE5NzU=';
-      if (btoa(pin) !== EXEC_PIN) {
-        showToast('Invalid Executive PIN.', 'error');
-        return;
-      }
-
       try {
-        const res = await fetch(API_BASE_URL.replace(/\/$/, '') + '/api/admin/ban', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin: atob(EXEC_PIN), username, reason })
+        const res = await fetch(API_BASE_URL + '/api/verify-pin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'exec', pin: pin })
         });
         const data = await res.json();
+        if (!data.success) {
+            showToast('Invalid Executive PIN.', 'error');
+            return;
+        }
+
+        const resBan = await fetch(API_BASE_URL.replace(/\/$/, '') + '/api/admin/ban', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: pin, username, reason })
+        });
+        const dataBan = await resBan.json();
         
-        if (data.status === 'success') {
+        if (dataBan.status === 'success') {
           showToast(`Successfully banned user ${username}.`, 'success');
           $('execBanUsername').value = '';
           $('execBanReason').value = '';
           $('execPinInput').value = '';
         } else {
-          showToast(`Ban Failed: ${data.error}`, 'error');
+          showToast(`Ban Failed: ${dataBan.error}`, 'error');
         }
       } catch (err) {
         showToast('Network error while executing ban.', 'error');
@@ -1781,7 +1824,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  $('apiUrlInput').value = API_BASE_URL;
   // Navigation — intercept Settings with PIN lock
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1793,15 +1835,27 @@ document.addEventListener('DOMContentLoaded', () => {
         if (banUntil > now) {
           const mins = Math.ceil((banUntil - now) / 60000);
           showToast(`Settings locked for ${mins} more minutes.`, 'error');
-          const execOverride = prompt(`Settings are BANNED for ${mins} more minute(s).\n\nEnter Executive PIN to unlock immediately:`);
-          if (execOverride === '19731975') {
-            localStorage.removeItem('dlm_exec_ban_until');
-            pinUnlocked = true;
-            setView('settings');
-            showToast('Executive override — Settings unlocked!', 'success');
-          } else if (execOverride !== null) {
-            showToast('Wrong Executive PIN.', 'error');
-          }
+          setTimeout(async () => {
+              const execOverride = prompt(`Settings are BANNED for ${mins} more minute(s).\n\nEnter Executive PIN to unlock immediately:`);
+              if (execOverride) {
+                try {
+                  const res = await fetch(API_BASE_URL + '/api/verify-pin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'exec', pin: execOverride })
+                  });
+                  const data = await res.json();
+                  if (data.success) {
+                    localStorage.removeItem('dlm_exec_ban_until');
+                    pinUnlocked = true;
+                    setView('settings');
+                    showToast('Executive override — Settings unlocked!', 'success');
+                  } else {
+                    showToast('Wrong Executive PIN.', 'error');
+                  }
+                } catch(e) {}
+              }
+          }, 100);
           return;
         }
         openPinOverlay();
@@ -1829,32 +1883,52 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Escape') closePinOverlay();
   });
   // Management PIN
-  $('mgmtSubmit').addEventListener('click', () => {
+  $('mgmtSubmit').addEventListener('click', async () => {
     const val = $('mgmtInput').value.trim();
-    if (btoa(val) === PIN_MGMT) {
-      pinAttempts = 0; pinBuf = ''; pinKeytimes = [];
-      showPinState('pin');
-      updateDots();
-      showToast('Management access granted', 'info');
-    } else {
-      $('mgmtError').textContent = 'Incorrect management PIN';
-      $('mgmtInput').value = '';
-      shakePinBox();
+    try {
+      const res = await fetch(API_BASE_URL + '/api/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'mgmt', pin: val })
+      });
+      const data = await res.json();
+      if (data.success) {
+        pinAttempts = 0; pinBuf = ''; pinKeytimes = [];
+        showPinState('pin');
+        updateDots();
+        showToast('Management access granted', 'info');
+      } else {
+        $('mgmtError').textContent = 'Incorrect management PIN';
+        $('mgmtInput').value = '';
+        shakePinBox();
+      }
+    } catch (e) {
+      showToast('Server error verifying PIN', 'error');
     }
   });
   $('mgmtInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('mgmtSubmit').click(); });
   // Puzzle PIN
-  $('puzzleSubmit').addEventListener('click', () => {
+  $('puzzleSubmit').addEventListener('click', async () => {
     const val = $('puzzleInput').value.trim().toUpperCase();
-    if (btoa(val) === PIN_PUZZLE_ANS) {
-      pinAttempts = 0; pinBuf = ''; pinKeytimes = [];
-      showPinState('pin');
-      updateDots();
-      showToast('Puzzle solved — try your PIN again', 'info');
-    } else {
-      $('puzzleError').textContent = 'Incorrect — type exactly: A1B2C3';
-      $('puzzleInput').value = '';
-      shakePinBox();
+    try {
+      const res = await fetch(API_BASE_URL + '/api/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'puzzle', pin: val })
+      });
+      const data = await res.json();
+      if (data.success) {
+        pinAttempts = 0; pinBuf = ''; pinKeytimes = [];
+        showPinState('pin');
+        updateDots();
+        showToast('Puzzle solved — try your PIN again', 'info');
+      } else {
+        $('puzzleError').textContent = 'Incorrect — try again';
+        $('puzzleInput').value = '';
+        shakePinBox();
+      }
+    } catch(e) {
+      showToast('Server error verifying PIN', 'error');
     }
   });
   $('puzzleInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('puzzleSubmit').click(); });
@@ -2059,7 +2133,7 @@ document.addEventListener('DOMContentLoaded', () => {
            scene.style.backgroundPosition = 'top left';
         } else {
            scene.style.backgroundSize = 'cover';
-           scene.style.backgroundRepeat = 'no-repeat';
+           scene.style.backgroundRepeat = 'n❌repeat';
            scene.style.backgroundPosition = 'center';
         }
       } else {
@@ -2431,7 +2505,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (accentColors.length > 2) {
         const removeBtn = document.createElement('button');
-        removeBtn.textContent = '×';
+        removeBtn.textContent = 'Ã—';
         removeBtn.className = 'ghost-btn danger-btn';
         removeBtn.style.padding = '4px 8px';
         removeBtn.style.minWidth = '0';
@@ -2477,7 +2551,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const val = e.target.value;
       if (!selectedGuildId) return;
       try {
-        await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/speed?guildId=${selectedGuildId}&val=${val}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
+        await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/speed-guildId=${selectedGuildId}&val=${val}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
       } catch (err) { console.error(err); }
     });
   }
@@ -2492,7 +2566,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const val = e.target.value;
       if (!selectedGuildId) return;
       try {
-        await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/pitch?guildId=${selectedGuildId}&val=${val}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
+        await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/pitch-guildId=${selectedGuildId}&val=${val}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
       } catch (err) { console.error(err); }
     });
   }
@@ -2598,7 +2672,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!file) return;
       if (!selectedGuildId) { showToast('Select a server first!', 'error'); mp3Input.value = ''; return; }
       const statusEl = $('mp3UploadStatus');
-      statusEl.textContent = `⏳ Uploading ${file.name}...`;
+      statusEl.textContent = `â³ Uploading ${file.name}...`;
       statusEl.className = 'mp3-upload-status info';
       try {
         const formData = new FormData();
@@ -2610,12 +2684,12 @@ document.addEventListener('DOMContentLoaded', () => {
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData.error || `HTTP ${res.status}`);
         }
-        statusEl.textContent = `✓ ${file.name} added to queue!`;
+        statusEl.textContent = `âœ“ ${file.name} added to queue!`;
         statusEl.className = 'mp3-upload-status success';
         setTimeout(() => { statusEl.textContent = ''; }, 4000);
         setTimeout(pollQueue, 800);
       } catch (err) {
-        statusEl.textContent = `✗ Upload failed: ${err.message}`;
+        statusEl.textContent = `âœ— Upload failed: ${err.message}`;
         statusEl.className = 'mp3-upload-status error';
       }
       mp3Input.value = '';
@@ -2631,12 +2705,12 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedSearchResult = null;
   });
   // Settings
-  $('saveApiBtn').addEventListener('click', () => {
+  if($('saveApiBtn')) $('saveApiBtn').addEventListener('click', () => {
     const url = $('apiUrlInput').value.trim();
     if (!url) { showToast('Enter a URL first', 'error'); return; }
     API_BASE_URL = url;
     localStorage.setItem('dlm_api_url', url);
-    showToast('Saved ✓', 'success');
+    showToast('Saved âœ“', 'success');
     stopPolling(); nowPlayingData = null; selectedGuildId = null;
     loadGuilds();
   });
@@ -2677,88 +2751,98 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) { showToast('Maintenance update failed: ' + err.message, 'error'); }
     finally { maintenanceBtn.disabled = false; }
   });
-  // Executive PIN for Global URL change
-  const EXEC_PIN = 'MTk3MzE5NzU=';
-  const EXEC_BAN_KEY = 'dlm_exec_ban_until';
-  let execPinAttempts = 0;
-  const execApiBtn = $('execApiBtn');
-  if (execApiBtn) {
-    execApiBtn.addEventListener('click', () => {
-      // Check if banned
-      const banUntil = parseInt(localStorage.getItem(EXEC_BAN_KEY) || '0', 10);
-      const now = Date.now();
-      if (banUntil > now) {
-        const mins = Math.ceil((banUntil - now) / 60000);
-        showToast(`Settings locked for ${mins} more minutes.`, 'error');
-        // Offer executive override (Do NOT show the code in the prompt)
-        const execOverride = prompt(`Settings are BANNED for ${mins} more minute(s).\n\nEnter Executive PIN to unlock immediately:`);
-        if (execOverride && btoa(execOverride) === EXEC_PIN) {
-          localStorage.removeItem(EXEC_BAN_KEY);
-          execPinAttempts = 0;
-          showToast('Executive override — Settings unlocked!', 'success');
-        } else if (execOverride) {
-          showToast('Wrong Executive PIN.', 'error');
-        }
-        return;
-      }
-      // Ask for Executive PIN (Do NOT show the code in the prompt)
-      const pin = prompt('Enter Executive PIN to change the Global API URL:');
-      if (pin === null) return; // cancelled
-      if (btoa(pin) === EXEC_PIN) {
-        execPinAttempts = 0;
-        const url = prompt('EXECUTIVE ACCESS GRANTED ✓\n\nEnter the new Global Bot API URL for all users:', API_BASE_URL);
-        if (url && url.trim()) {
-          const clean = url.trim();
-          
-          fetch(API_BASE_URL + '/api/update-global-url', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pin: atob(EXEC_PIN), url: clean })
-          }).then(res => res.json()).then(data => {
-              if (data.status === 'success') {
-                  showToast('Global API URL permanently updated across all users!', 'success');
+     // Executive PIN for Global URL change
+    const EXEC_BAN_KEY = 'dlm_exec_ban_until';
+    let execPinAttempts = 0;
+    const execApiBtn = $('execApiBtn');
+    if (execApiBtn) {
+      execApiBtn.addEventListener('click', async () => {
+        const banUntil = parseInt(localStorage.getItem(EXEC_BAN_KEY) || '0', 10);
+        const now = Date.now();
+        if (banUntil > now) {
+          const mins = Math.ceil((banUntil - now) / 60000);
+          showToast(`Settings locked for ${mins} more minutes.`, 'error');
+          // Offer executive override
+          const execOverride = prompt(`Settings are BANNED for ${mins} more minute(s).\n\nEnter Executive PIN to unlock immediately:`);
+          if (execOverride) {
+            try {
+              const res = await fetch(API_BASE_URL + '/api/verify-pin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'exec', pin: execOverride })
+              });
+              const data = await res.json();
+              if (data.success) {
+                localStorage.removeItem(EXEC_BAN_KEY);
+                execPinAttempts = 0;
+                showToast('Executive override — Settings unlocked!', 'success');
               } else {
-                  showToast('Failed to update globally: ' + data.error, 'error');
+                showToast('Wrong Executive PIN.', 'error');
               }
-          }).catch(err => {
-              console.error(err);
-              showToast('Failed to reach backend for global update', 'error');
+            } catch(e) { showToast('Network Error', 'error'); }
+          }
+          return;
+        }
+        
+        // Ask for Executive PIN
+        const pin = prompt('Enter Executive PIN to change the Global API URL:');
+        if (!pin) return;
+        
+        try {
+          const res = await fetch(API_BASE_URL + '/api/verify-pin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'exec', pin: pin })
           });
-
-          API_BASE_URL = clean;
-          localStorage.setItem('dlm_api_url', clean);
-          $('apiUrlInput').value = clean;
-          stopPolling(); nowPlayingData = null; selectedGuildId = null;
-          loadGuilds();
+          const data = await res.json();
+          if (data.success) {
+            execPinAttempts = 0;
+            const url = prompt('EXECUTIVE ACCESS GRANTED ðŸ›¡ï¸\n\nEnter the new Global Bot API URL for all users:', API_BASE_URL);
+            if (url && url.trim()) {
+              const clean = url.trim();
+              fetch(API_BASE_URL + '/api/update-global-url', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ pin: pin, url: clean })
+              }).then(res => res.json()).then(data => {
+                  if (data.status === 'success') {
+                      showToast('Global API URL permanently updated across all users!', 'success');
+                      setTimeout(() => window.location.reload(), 1500);
+                  } else {
+                      showToast('Failed: ' + data.error, 'error');
+                  }
+              });
+            }
+          } else {
+            execPinAttempts++;
+            if (execPinAttempts >= 3) {
+              const banTime = Date.now() + 60 * 60 * 1000;
+              localStorage.setItem(EXEC_BAN_KEY, banTime.toString());
+              execPinAttempts = 0;
+              showToast('3 wrong PINs! Settings BANNED for 1 hour.', 'error');
+              pinUnlocked = false;
+              setView('player');
+              alert('You have entered the wrong Executive PIN 3 times.\nSettings access is now BANNED for 1 hour.\nOnly the Executive PIN can unlock it early.');
+            } else {
+              const remaining = 3 - execPinAttempts;
+              showToast(`Wrong Executive PIN — ${remaining} attempt${remaining !== 1 ? 's' : ''} left before 1hr ban!`, 'error');
+            }
+          }
+        } catch(e) {
+          showToast('Network error verifying PIN', 'error');
         }
-      } else {
-        execPinAttempts++;
-        if (execPinAttempts >= 3) {
-          const banTime = Date.now() + 60 * 60 * 1000; // 1 hour
-          localStorage.setItem(EXEC_BAN_KEY, banTime.toString());
-          execPinAttempts = 0;
-          showToast('3 wrong PINs! Settings BANNED for 1 hour.', 'error');
-          // Force them out of settings
-          pinUnlocked = false;
-          setView('player');
-          alert('You have entered the wrong Executive PIN 3 times.\nSettings access is now BANNED for 1 hour.\nOnly the Executive PIN can unlock it early.');
-        } else {
-          const remaining = 3 - execPinAttempts;
-          showToast(`Wrong Executive PIN — ${remaining} attempt${remaining !== 1 ? 's' : ''} left before 1hr ban!`, 'error');
-        }
-      }
-    });
-  }
-  $('testApiBtn').addEventListener('click', async () => {
-    const url    = $('apiUrlInput').value.trim() || API_BASE_URL;
+      });
+    }
+    if($('testApiBtn')) $('testApiBtn').addEventListener('click', async () => {
+      const url    = $('apiUrlInput').value.trim() || API_BASE_URL;
     const result = $('apiTestResult');
     result.className = 'test-result'; result.textContent = 'Testing...';
     try {
       const res = await fetch(url.replace(/\/$/, '') + '/api/health', { headers: { 'ngrok-skip-browser-warning': 'true' } });
-      if (res.ok) { result.className = 'test-result success'; result.textContent = '✓ Connection successful!'; }
+      if (res.ok) { result.className = 'test-result success'; result.textContent = 'âœ“ Connection successful!'; }
       else throw new Error(`HTTP ${res.status}`);
     } catch (err) {
-      result.className = 'test-result error'; result.textContent = `✗ Failed — ${err.message}`;
+      result.className = 'test-result error'; result.textContent = `âœ— Failed — ${err.message}`;
     }
   });
   // Clear Recently Played History button (Inside Settings, not PIN-protected)
@@ -2769,7 +2853,7 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('dlm_recently_played', JSON.stringify([]));
       if (typeof window.syncSettingsToCloud === 'function') window.syncSettingsToCloud();
       renderRecentlyPlayed();
-      showToast('Recently Played history cleared 🗑️', 'info');
+      showToast('Recently Played history cleared ðŸ—‘ï¸', 'info');
     });
   }
   // Sidebar toggle
@@ -2878,7 +2962,7 @@ function physicsLoop() {
     blob.style.transform = `translate(${blob._tx}px, ${blob._ty}px)`;
   });
 
-  // Blob-to-blob collision detection (all blobs, not just active ones)
+  // Blob-t❌blob collision detection (all blobs, not just active ones)
   const allBlobs = Array.from(document.querySelectorAll('.blob'));
   for (let i = 0; i < allBlobs.length; i++) {
     for (let j = i + 1; j < allBlobs.length; j++) {
@@ -3082,7 +3166,7 @@ if (statusDotEl) {
     const username = localStorage.getItem('dlm_username');
     if (!token || !username) return;
 
-    fetch(API_BASE_URL + '/api/user/wallpaper-settings?user=' + encodeURIComponent(username))
+    fetch(API_BASE_URL + '/api/user/wallpaper-settings-user=' + encodeURIComponent(username))
       .then(res => res.json())
       .then(data => {
         if (!data.error) {
@@ -3095,7 +3179,7 @@ if (statusDotEl) {
           if (gridToggleBtn) gridToggleBtn.checked = data.gridEnabled;
           if (gridSizeSlider) gridSizeSlider.value = data.gridAmount;
         }
-        const bgUrl = API_BASE_URL + '/api/user/wallpaper?user=' + encodeURIComponent(username) + '&t=' + Date.now();
+        const bgUrl = API_BASE_URL + '/api/user/wallpaper-user=' + encodeURIComponent(username) + '&t=' + Date.now();
         fetch(bgUrl).then(r => {
           if (r.ok) {
             r.blob().then(b => {
@@ -3110,3 +3194,4 @@ if (statusDotEl) {
         });
       }).catch(() => {});
   }
+

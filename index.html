@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-database-compat.js"></script>
   <link rel="stylesheet" href="css/styles.css?v=5" />
   <style>
     /* New UI Toggles */
@@ -708,27 +710,6 @@
               <h3>Developer Mode</h3>
               <p class="settings-desc">Unlocks all file extensions (.txt, etc) for uploads in this browser.</p>
               <div class="settings-actions"><button class="ghost-btn" id="developerModeBtn">Enable Admin Settings for this Browser</button></div>
-            </div>
-            <div class="glass-card settings-card">
-              <div class="settings-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
-              </div>
-              <h3>Bot API URL</h3>
-              <p class="settings-desc">The URL where your DLM BlueSteel Player bot is running its HTTP server.</p>
-              <div class="settings-row">
-                <input id="apiUrlInput" type="text" placeholder="http://localhost:8080" class="settings-input" />
-              </div>
-              <div class="settings-actions">
-                <button class="gradient-btn" id="saveApiBtn">Save (Local)</button>
-                <button class="ghost-btn" id="testApiBtn">Test Connection</button>
-              </div>
-              <div class="settings-actions" style="margin-top:10px;">
-                <button class="ghost-btn danger-btn" id="execApiBtn">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                  Change Global URL (Exec)
-                </button>
-              </div>
-              <div id="apiTestResult" class="test-result"></div>
             </div>
             <div class="glass-card settings-card">
               <div class="settings-icon accent-2">
