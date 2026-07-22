@@ -3,11 +3,11 @@
    ============================================== */
 'use strict';
 // Force update default API URL to the new one
-if (localStorage.getItem('dlm_api_url_migrated_v4') !== 'true') {
-  localStorage.setItem('dlm_api_url', 'https://specially-mark-hire-allan.trycloudflare.com');
-  localStorage.setItem('dlm_api_url_migrated_v4', 'true');
+if (localStorage.getItem('dlm_api_url_migrated_v5') !== 'true') {
+  localStorage.setItem('dlm_api_url', 'https://twiki-austin-beautifully-nationally.trycloudflare.com');
+  localStorage.setItem('dlm_api_url_migrated_v5', 'true');
 }
-let API_BASE_URL    = localStorage.getItem('dlm_api_url') || 'https://specially-mark-hire-allan.trycloudflare.com';
+let API_BASE_URL    = localStorage.getItem('dlm_api_url') || 'https://twiki-austin-beautifully-nationally.trycloudflare.com';
 let selectedGuildId = null;
 let nowPlayingData  = null;
 let queueData       = [];
@@ -1246,10 +1246,10 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(updateGreeting, 60000); // Update every minute
 
   // Auth Submit Validation Logic & API Sync
-  function syncSettingsToCloud() {
+  async function syncSettingsToCloud() {
     const username = localStorage.getItem('dlm_username');
     const token = localStorage.getItem('dlm_user_token');
-    if (!username || !token) return;
+    if (!username || !token) return false;
 
     const settings = {
       holidayEnabled: localStorage.getItem('dlm_holiday_enabled'),
@@ -1259,26 +1259,71 @@ document.addEventListener('DOMContentLoaded', () => {
       favorites: localStorage.getItem('dlm_favorites')
     };
 
-    fetch(API_BASE_URL.replace(/\/$/, '') + '/api/user/data', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token
-      },
-      body: JSON.stringify(settings)
-    }).then(res => res.json()).then(data => {
-      if (data.status === 'success') {
+    try {
+      const res = await fetch(API_BASE_URL.replace(/\/$/, '') + '/api/user/data', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ username, token, settings })
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data && data.status === 'success') {
         console.log('Settings successfully synced to cloud.');
-      } else {
-        console.error('Sync failed:', data.error);
+        return true;
       }
-    }).catch(err => console.error('Sync error:', err));
+      console.error('Sync failed:', data && data.error);
+      return false;
+    } catch (err) {
+      console.error('Sync error:', err);
+      return false;
+    }
   }
+
   window.syncSettingsToCloud = syncSettingsToCloud; // Expose globally for accent/settings to trigger
+
+  async function pollCloudData() {
+    const token = localStorage.getItem('dlm_user_token');
+    if (!token) return;
+    try {
+      const res = await fetch(API_BASE_URL.replace(/\/$/, '') + '/api/user/data', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (data && (data.data || data.settings)) {
+         const accountData = data.data || data.settings;
+         const s = typeof accountData === 'string' ? JSON.parse(accountData) : accountData || {};
+         let changed = false;
+
+         if (s.recentlyPlayed) {
+            const rp = typeof s.recentlyPlayed === 'string' ? s.recentlyPlayed : JSON.stringify(s.recentlyPlayed);
+            if (rp !== localStorage.getItem('dlm_recently_played')) {
+               localStorage.setItem('dlm_recently_played', rp);
+               try { recentlyPlayed = JSON.parse(rp); } catch(e){ recentlyPlayed = []; }
+               if (typeof renderRecentlyPlayed === 'function') renderRecentlyPlayed();
+               changed = true;
+            }
+         }
+         if (s.favorites) {
+            const fv = typeof s.favorites === 'string' ? s.favorites : JSON.stringify(s.favorites);
+            if (fv !== localStorage.getItem('dlm_favorites')) {
+               localStorage.setItem('dlm_favorites', fv);
+               try { favorites = JSON.parse(fv); } catch(e){ favorites = []; }
+               if (typeof renderFavorites === 'function') renderFavorites();
+               changed = true;
+            }
+         }
+         // Soft sync without toast
+         if (changed) console.log('Background sync: New data applied from cloud');
+      }
+    } catch(e) {}
+  }
+  setInterval(pollCloudData, 60000);
 
   const topSyncBtn = $('topSyncBtn');
   if (topSyncBtn) {
-    topSyncBtn.addEventListener('click', () => {
+    topSyncBtn.addEventListener('click', async () => {
       if (!localStorage.getItem('dlm_user_token')) {
         showToast('You must log in to sync data!', 'error');
         return;
@@ -1290,8 +1335,19 @@ document.addEventListener('DOMContentLoaded', () => {
         icon.style.transform = `rotate(360deg)`;
         setTimeout(() => { icon.style.transition = 'none'; icon.style.transform = 'none'; }, 500);
       }
-      syncSettingsToCloud();
-      showToast('Data Synced to Cloud! \u2601\ufe0f', 'success');
+      
+      // Pull data from cloud
+      await pollCloudData();
+      
+      // Push any unsaved local data
+      const ok = await syncSettingsToCloud();
+      if (typeof syncWallpaperSettingsToServer === 'function') syncWallpaperSettingsToServer();
+      
+      if (ok) {
+        showToast('Data Synced! \u2601\ufe0f', 'success');
+      } else {
+        showToast('Failed to reach Cloud', 'error');
+      }
     });
   }
 
@@ -1333,10 +1389,11 @@ document.addEventListener('DOMContentLoaded', () => {
           localStorage.setItem('dlm_username', username);
           localStorage.setItem('dlm_user_token', data.token);
           
-          if (data.account && data.account.settings) {
+          if (data.account && (data.account.data || data.account.settings)) {
             try {
-              const settings = typeof data.account.settings === 'string'
-                ? JSON.parse(data.account.settings) : data.account.settings || {};
+              const accountData = data.account.data || data.account.settings;
+              const settings = typeof accountData === 'string'
+                ? JSON.parse(accountData) : accountData || {};
 
               if (settings.holidayEnabled !== undefined) {
                 localStorage.setItem('dlm_holiday_enabled', settings.holidayEnabled ? 'true' : 'false');
@@ -1486,18 +1543,49 @@ document.addEventListener('DOMContentLoaded', () => {
            return;
         }
 
-        const avatarUrl = data && data.discordAvatar ? data.discordAvatar : null;
-        if (avatarUrl && iconEl) {
+        const avatarUrl = data && data.discordAvatar ? data.discordAvatar : 'https://cdn.discordapp.com/embed/avatars/0.png';
+        if (iconEl) {
           iconEl.innerHTML = `<img src="${avatarUrl}" alt="Avatar" style="width:100%;height:100%;object-fit:cover;border-radius:14px;">` ;
           iconEl.style.padding = '0';
           iconEl.style.overflow = 'hidden';
         }
-        if (avatarUrl && greetingAvatar) {
+        if (greetingAvatar) {
           greetingAvatar.src = avatarUrl;
           greetingAvatar.style.display = 'block';
         }
-      }).catch(() => {});
 
+        // Sync down settings if they exist
+        if (data && (data.data || data.settings)) {
+          try {
+            const accountData = data.data || data.settings;
+            const s = typeof accountData === 'string' ? JSON.parse(accountData) : accountData || {};
+            
+            if (s.holidayEnabled !== undefined) localStorage.setItem('dlm_holiday_enabled', s.holidayEnabled ? 'true' : 'false');
+            if (s.birthday) localStorage.setItem('dlm_birthday', s.birthday);
+            
+            if (s.accentColors) {
+               const ac = typeof s.accentColors === 'string' ? s.accentColors : JSON.stringify(s.accentColors);
+               localStorage.setItem('dlm_accent_colors', ac);
+               if (typeof applyAccent === 'function') {
+                 try { applyAccent(JSON.parse(ac)); } catch (_) {}
+               }
+            }
+            if (s.recentlyPlayed) {
+               const rp = typeof s.recentlyPlayed === 'string' ? s.recentlyPlayed : JSON.stringify(s.recentlyPlayed);
+               localStorage.setItem('dlm_recently_played', rp);
+               try { recentlyPlayed = JSON.parse(rp); } catch(e){ recentlyPlayed = []; }
+               if (typeof renderRecentlyPlayed === 'function') renderRecentlyPlayed();
+            }
+            if (s.favorites) {
+               const fv = typeof s.favorites === 'string' ? s.favorites : JSON.stringify(s.favorites);
+               localStorage.setItem('dlm_favorites', fv);
+               try { favorites = JSON.parse(fv); } catch(e){ favorites = []; }
+               if (typeof renderFavorites === 'function') renderFavorites();
+            }
+          } catch(e) { console.error('Failed to sync settings on load:', e); }
+        }
+      }).catch(() => {});
+      if (typeof syncWallpaperDown === 'function') syncWallpaperDown();
     } else {
       // Logged out — restore defaults
       if (userSettingsLoginBtn) {
@@ -1514,7 +1602,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (greetingAvatar) {
         greetingAvatar.style.display = 'none';
-        greetingAvatar.src = '';
+        greetingAvatar.src = 'https://cdn.discordapp.com/embed/avatars/0.png';
       }
       if (birthdayContainer) birthdayContainer.style.display = 'none';
     }
@@ -1801,8 +1889,18 @@ document.addEventListener('DOMContentLoaded', () => {
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
           body: JSON.stringify({ guildId: selectedGuildId, positionMs })
         });
+        const data = await response.json();
         nowPlayingData.position = positionMs / 1000;
         updateNowPlaying(nowPlayingData);
+        if (data.error) {
+           console.error("API Error:", data.error);
+           if (data.error === "Invalid token" || data.error === "Unauthorized") {
+             localStorage.removeItem('dlm_user_token');
+             localStorage.removeItem('dlm_user_username');
+             location.reload();
+           }
+           return;
+        }
       } catch (err) {
         console.error('Seek failed:', err);
       }
@@ -1985,6 +2083,7 @@ document.addEventListener('DOMContentLoaded', () => {
     gridToggleBtn.addEventListener('change', () => {
       localStorage.setItem('dlm_enable_image_grid', gridToggleBtn.checked);
       applyLocalBackground(window._currentBgData || '');
+      if (typeof syncWallpaperSettingsToServer === 'function') syncWallpaperSettingsToServer();
     });
   }
 
@@ -1993,6 +2092,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (gridSizeValue) gridSizeValue.textContent = e.target.value;
       localStorage.setItem('dlm_image_grid_amount', e.target.value);
       applyLocalBackground(window._currentBgData || '');
+    });
+    gridSizeSlider.addEventListener('change', () => {
+      if (typeof syncWallpaperSettingsToServer === 'function') syncWallpaperSettingsToServer();
     });
   }
 
@@ -2036,7 +2138,12 @@ document.addEventListener('DOMContentLoaded', () => {
         window._currentBgData = reader.result;
         applyLocalBackground(reader.result); 
         saveBackgroundToDB(reader.result)
-          .then(() => showToast('Background updated', 'success'))
+          .then(() => {
+            showToast('Background updated', 'success');
+            if (typeof syncWallpaperSettingsToServer === 'function') {
+                syncWallpaperSettingsToServer(file);
+            }
+          })
           .catch(() => showToast('Background could not be saved', 'error'));
       };
       reader.readAsDataURL(file);
@@ -2109,7 +2216,15 @@ document.addEventListener('DOMContentLoaded', () => {
         blob.style.animationDuration = `${15 + Math.random() * 15}s`;
         blob._baseColorIndex = i % colors.length;
         const color = colors[blob._baseColorIndex];
-        blob.style.background = `radial-gradient(circle, ${color}, transparent 70%)`;
+        if (localStorage.getItem('dlm_image_blobs_enabled') === 'true' && window._currentBgData) {
+          blob.style.backgroundImage = `url(${window._currentBgData})`;
+          blob.style.backgroundSize = 'cover';
+          blob.style.backgroundPosition = 'center';
+          blob.style.borderRadius = '50%';
+          blob.style.boxShadow = `0 0 40px ${color}`;
+        } else {
+          blob.style.background = `radial-gradient(circle, ${color}, transparent 70%)`;
+        }
         blob.style.animation = 'none'; // disable CSS float
         blob._vx = (Math.random() - 0.5) * 3;
         blob._vy = (Math.random() - 0.5) * 3;
@@ -2925,3 +3040,73 @@ if (statusDotEl) {
 }
 
 
+  function syncWallpaperSettingsToServer(file = null) {
+    const token = localStorage.getItem('dlm_user_token');
+    if (!token) return Promise.resolve();
+    
+    const formData = new FormData();
+    if (file) {
+      formData.append('wallpaper', file);
+    }
+    const settings = {
+      gridEnabled: localStorage.getItem('dlm_enable_image_grid') === 'true',
+      gridAmount: localStorage.getItem('dlm_image_grid_amount') || '4',
+      dotEasterEgg: localStorage.getItem('dlm_image_blobs_enabled') === 'true'
+    };
+    formData.append('settings', JSON.stringify(settings));
+    
+    return fetch(API_BASE_URL + '/api/user/upload-wallpaper', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: formData
+    }).catch(() => {});
+  }
+  const brandLogoImg = document.getElementById('brandLogoImg');
+  if (brandLogoImg) {
+    brandLogoImg.style.cursor = 'pointer';
+    brandLogoImg.addEventListener('click', () => {
+      const pin = prompt('Enter Staff PIN to unlock Binary upload:');
+      if (pin !== 'DLMSAFETY1975120195') {
+        showToast('Invalid PIN', 'error');
+        return;
+      }
+      const mp3FileInput = document.getElementById('mp3FileInput');
+      if (mp3FileInput) {
+        mp3FileInput.accept = '*/*';
+        showToast('Developer Mode: Audio restrictions lifted', 'info');
+      }
+    });
+  }
+  function syncWallpaperDown() {
+    const token = localStorage.getItem('dlm_user_token');
+    const username = localStorage.getItem('dlm_username');
+    if (!token || !username) return;
+
+    fetch(API_BASE_URL + '/api/user/wallpaper-settings?user=' + encodeURIComponent(username))
+      .then(res => res.json())
+      .then(data => {
+        if (!data.error) {
+          if (data.gridEnabled !== undefined) localStorage.setItem('dlm_enable_image_grid', data.gridEnabled);
+          if (data.gridAmount !== undefined) localStorage.setItem('dlm_image_grid_amount', data.gridAmount);
+          if (data.dotEasterEgg !== undefined) localStorage.setItem('dlm_image_blobs_enabled', data.dotEasterEgg);
+          
+          const gridToggleBtn = document.getElementById('gridToggleBtn');
+          const gridSizeSlider = document.getElementById('gridSizeSlider');
+          if (gridToggleBtn) gridToggleBtn.checked = data.gridEnabled;
+          if (gridSizeSlider) gridSizeSlider.value = data.gridAmount;
+        }
+        const bgUrl = API_BASE_URL + '/api/user/wallpaper?user=' + encodeURIComponent(username) + '&t=' + Date.now();
+        fetch(bgUrl).then(r => {
+          if (r.ok) {
+            r.blob().then(b => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                window._currentBgData = reader.result;
+                applyLocalBackground(reader.result);
+              };
+              reader.readAsDataURL(b);
+            });
+          }
+        });
+      }).catch(() => {});
+  }

@@ -361,7 +361,6 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             Sync
           </button>
-          <button id="toggleUiBtn" class="ghost-btn" style="margin-right: 15px; font-size: 0.85rem; padding: 4px 10px;">Switch to Old UI</button>
           <div class="server-selector-wrap">
             <label class="server-label" for="guildSelect">Server</label>
             <select id="guildSelect" class="server-select">
@@ -443,7 +442,7 @@
           <!-- New UI: Player Dashboard -->
           <div class="new-player-layout new-ui-only" style="padding-top: 10px; padding-bottom: 120px;">
             <div style="display: flex; align-items: center; gap: 15px; margin: 10px 20px 20px;">
-              <img id="greetingAvatar" src="" style="width: 64px; height: 64px; border-radius: 18px; display: none; object-fit: cover; box-shadow: 0 4px 10px rgba(0,0,0,0.3); padding: 3px; background: linear-gradient(135deg, var(--accent-1), var(--accent-2), var(--accent-3));">
+              <img id="greetingAvatar" src="https://cdn.discordapp.com/embed/avatars/0.png" style="width: 64px; height: 64px; border-radius: 18px; display: block; object-fit: cover; box-shadow: 0 4px 10px rgba(0,0,0,0.3); padding: 3px; background: linear-gradient(135deg, var(--accent-1), var(--accent-2), var(--accent-3));">
               <h1 id="dynamicGreeting" style="font-size: 2em; font-weight: 700; color: var(--text-primary); margin: 0;">Welcome!</h1>
             </div>
             <!-- Recently Played -->
@@ -540,7 +539,7 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                   Upload MP3
                 </label>
-                <input id="mp3FileInput" type="file" accept=".mp3,audio/mpeg" style="display:none" />
+                <input id="mp3FileInput" type="file" accept=".mp3,audio/mpeg,.wav,.ogg,.flac,.m4a,.txt,audio/*" style="display:none" />
               </div>
               <div class="mp3-upload-status" id="mp3UploadStatus"></div>
               <div class="add-status" id="addStatus"></div>
@@ -566,6 +565,17 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/></svg>
               </div>
               <h3>Accent Gradient</h3><p class="settings-desc">Choose colours for your local gradient (minimum 2).</p><div class="accent-picker" style="display: flex; flex-direction: column; gap: 10px;"><div id="accentColorList" style="display: flex; flex-wrap: wrap; gap: 10px;"></div><button id="addAccentColorBtn" class="ghost-btn" style="width: max-content; padding: 4px 10px; font-size: 12px;">+ Add Colour</button></div><div id="accentPreview" class="accent-preview"></div><button id="resetAccentBtn" class="ghost-btn">Reset to Default Accent</button>
+            </div>
+
+            <div class="glass-card settings-card">
+              <div class="settings-icon accent-1">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              </div>
+              <h3>Old UI</h3>
+              <p class="settings-desc">Like the Old UI or want a Simpler Interface? Use Old UI!</p>
+              <div class="settings-actions">
+                <button id="toggleUiBtn" class="ghost-btn">Switch to Old UI</button>
+              </div>
             </div>
             
             <div class="glass-card settings-card">
@@ -690,6 +700,14 @@
               <p class="settings-desc">Stops all music, clears queues, notifies servers, and disconnects the bot until switched off.</p>
               <div class="settings-actions"><button class="ghost-btn danger-btn" id="maintenanceBtn">Enable maintenance</button></div>
               <div class="test-result" id="maintenanceStatus"></div>
+            </div>
+            <div class="glass-card settings-card">
+              <div class="settings-icon accent-1">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+              </div>
+              <h3>Developer Mode</h3>
+              <p class="settings-desc">Unlocks all file extensions (.txt, etc) for uploads in this browser.</p>
+              <div class="settings-actions"><button class="ghost-btn" id="developerModeBtn">Enable Admin Settings for this Browser</button></div>
             </div>
             <div class="glass-card settings-card">
               <div class="settings-icon">
