@@ -1,13 +1,101 @@
+
+// --- FIREBASE BRIDGE FETCH OVERRIDE ---
+if (typeof window !== 'undefined' && !window.__fetch_overridden) {
+  window.__fetch_overridden = true;
+  const originalFetch = window.fetch;
+  window.fetch = async function(url, opts = {}) {
+    let urlStr = typeof url === 'string' ? url : (url ? url.url : '');
+    
+    // We intercept EVERYTHING since it's hardcoded to Firebase now
+    if (urlStr.includes('/api/') || urlStr.includes('verify-pin') || urlStr.includes('guilds') || urlStr.includes('FIREBASE')) {
+      let path = urlStr;
+      if (path.includes('FIREBASE')) {
+          path = path.split('FIREBASE')[1];
+      }
+      if (path.startsWith('http')) {
+          try { let u = new URL(path); path = u.pathname + u.search; } catch(e){}
+      }
+      if (!path.startsWith('/')) path = '/' + path;
+
+      return new Promise((resolve, reject) => {
+        try {
+            if (typeof firebase === 'undefined') {
+                showToast('Firebase SDK failed to load. Are you opening this from a file:/// URL? Try GitHub Pages instead!', 'error');
+                return resolve({ ok: false, status: 500, json: async () => ({error: 'Firebase not loaded'}) });
+            }
+            
+            const reqId = Date.now() + '_' + Math.random().toString(36).substring(2);
+            const method = opts.method || 'GET';
+            let body = opts.body || null;
+            
+            if (body && typeof body !== 'string') {
+               if (path.includes('upload')) {
+                   return resolve({
+                       ok: false,
+                       status: 400,
+                       json: async () => ({ error: 'File uploads are disabled over Firebase bridge' }),
+                       text: async () => JSON.stringify({ error: 'File uploads are disabled' })
+                   });
+               }
+            }
+    
+            const headers = opts.headers || {};
+            const resRef = firebase.database().ref('responses/' + reqId);
+            resRef.on('value', snap => {
+              const val = snap.val();
+              if (val) {
+                resRef.off();
+                firebase.database().ref('responses/' + reqId).remove();
+                
+                let responseBody = val.data || '{}';
+                let responseStatus = val.error ? 400 : (val.status || 200);
+                
+                const mockResponse = {
+                    ok: !val.error && responseStatus >= 200 && responseStatus < 300,
+                    status: responseStatus,
+                    json: async () => {
+                        if (val.error) return { error: val.error };
+                        try { return JSON.parse(responseBody); } catch(e) { return {}; }
+                    },
+                    text: async () => {
+                        if (val.error) return JSON.stringify({error: val.error});
+                        return typeof responseBody === 'string' ? responseBody : JSON.stringify(responseBody);
+                    }
+                };
+                resolve(mockResponse);
+              }
+            });
+            
+            firebase.database().ref('requests/' + reqId).set({ path, method, body, headers });
+            
+            setTimeout(() => {
+              resRef.off();
+              firebase.database().ref('requests/' + reqId).remove();
+              resolve({ ok: false, status: 504, json: async () => ({error: 'Timeout: Bot offline'}), text: async () => '{"error":"Timeout"}' });
+            }, 15000);
+        } catch (err) {
+            showToast('Firebase Error: ' + err.message, 'error');
+            resolve({ ok: false, status: 500, json: async () => ({error: err.message}) });
+        }
+      });
+    }
+    return originalFetch(url, opts);
+  };
+}
+// --- END FIREBASE OVERRIDE ---
+
+
+
 /* ==============================================
    DLM BlueSteel Player — Dashboard App Logic v2.1
    ============================================== */
 'use strict';
-// Force update default API URL to the new one
-if (localStorage.getItem('dlm_api_url_migrated_v5') !== 'true') {
-  localStorage.setItem('dlm_api_url', 'https://twiki-austin-beautifully-nationally.trycloudflare.com');
-  localStorage.setItem('dlm_api_url_migrated_v5', 'true');
+let storedApi = localStorage.getItem('dlm_api_url');
+if (storedApi && storedApi.includes('trycloudflare.com')) {
+  localStorage.removeItem('dlm_api_url');
+  storedApi = null;
 }
-let API_BASE_URL    = localStorage.getItem('dlm_api_url') || 'https://twiki-austin-beautifully-nationally.trycloudflare.com';
+let API_BASE_URL = 'FIREBASE';
 let selectedGuildId = null;
 let nowPlayingData  = null;
 let queueData       = [];
@@ -17,21 +105,7 @@ let queueTimer      = null;
 let searchDebounce  = null;
 let selectedSearchResult = null; // { url, title }
 
-// --- Firebase Cloud Bridge Initialization ---
-const firebaseConfig = {
-  apiKey: "AIzaSyBfwcGysmxoTMObWyu4ZOya_Gelsf0X24s",
-  authDomain: "dlm-bluesteel.firebaseapp.com",
-  databaseURL: "https://dlm-bluesteel-default-rtdb.firebaseio.com",
-  projectId: "dlm-bluesteel",
-  storageBucket: "dlm-bluesteel.firebasestorage.app",
-  messagingSenderId: "747973164451",
-  appId: "1:747973164451:web:037c9c84b128493ca4ae16",
-  measurementId: "G-XJN9HB63WT"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-// --------------------------------------------
-// â”€â”€â”€ Volume and Mute State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Volume and Mute State ─────────────────────â”€
 let currentVolume   = 100;
 let isMuted         = false;
 let preMuteVolume   = 100;
@@ -61,52 +135,31 @@ function updateVolumeButtons() {
 async function sendVolumeChange(vol) {
   if (!selectedGuildId) return;
   try {
-    await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/volume-guildId=${selectedGuildId}&val=${vol}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
+    await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/volume?guildId=${selectedGuildId}&val=${vol}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
   } catch (err) { console.error(err); }
 }
-// â”€â”€â”€ DOM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── DOM ───────────────────────────────────────â”€
 const $ = id => document.getElementById(id);
-// â”€â”€â”€ Firebase Cloud Bridge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 async function apiFetch(path, opts = {}) {
-  const reqId = Date.now() + "_" + Math.random().toString(36).substring(2);
-  const method = opts.method || 'GET';
-  const body = opts.body || null;
-  
-  return new Promise((resolve, reject) => {
-    // 1. Listen for the response first
-    const resRef = db.ref('responses/' + reqId);
-    resRef.on('value', snap => {
-      const val = snap.val();
-      if (val) {
-        resRef.off();
-        db.ref('responses/' + reqId).remove(); // Cleanup
-        if (val.error) {
-          reject(new Error(val.error));
-        } else {
-          try {
-            resolve(JSON.parse(val.data));
-          } catch (e) {
-            resolve(val.data); // If it's not JSON, return raw text
-          }
-        }
-      }
-    });
-    
-    // 2. Push the request to the bot
-    db.ref('requests/' + reqId).set({
-      path: path,
-      method: method,
-      body: body
-    });
-    
-    // 3. Timeout after 15 seconds
-    setTimeout(() => {
-      resRef.off();
-      reject(new Error("Bot did not respond in time! Is it running?"));
-    }, 15000);
+  const url = API_BASE_URL.replace(/\/$/, '') + path;
+  const res = await fetch(url, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+      ...(opts.headers || {}),
+    },
   });
+  const text = await res.text();
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try { const j = JSON.parse(text); if (j && j.error) msg = j.error; } catch (_) {}
+    throw new Error(msg);
+  }
+  return text ? JSON.parse(text) : null;
 }
-// â”€â”€â”€ Connection Status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Connection Status ────────────────────────â”€â”€
 function setOnline(online) {
   if (isOnline === online) return;
   isOnline = online;
@@ -122,7 +175,7 @@ function setOnline(online) {
   }
   refreshButtonStates();
 }
-// â”€â”€â”€ Polling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Polling ────────────────────────────────────
 function startPolling() {
   stopPolling();
   pollNowPlaying();
@@ -137,7 +190,7 @@ function stopPolling() {
 async function pollNowPlaying() {
   if (!selectedGuildId) return;
   try {
-    const data = await apiFetch(`/api/now-playing-guildId=${selectedGuildId}`);
+    const data = await apiFetch(`/api/now-playing?guildId=${selectedGuildId}`);
     setOnline(true);
     updateNowPlaying(data);
   } catch {
@@ -148,7 +201,7 @@ async function pollNowPlaying() {
 async function pollQueue() {
   if (!selectedGuildId) return;
   try {
-    const data = await apiFetch(`/api/queue-guildId=${selectedGuildId}`);
+    const data = await apiFetch(`/api/queue?guildId=${selectedGuildId}`);
     setOnline(true);
     queueData = Array.isArray(data) ? data : [];
     renderQueue();
@@ -156,7 +209,7 @@ async function pollQueue() {
     setOnline(false);
   }
 }
-// â”€â”€â”€ Guilds â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Guilds ────────────────────────────────────â”€
 async function loadGuilds() {
   const sel = $('guildSelect');
   sel.innerHTML = '<option value="">Loading...</option>';
@@ -183,7 +236,7 @@ async function loadGuilds() {
     showToast('Cannot connect to bot — check the API URL in Settings', 'error');
   }
 }
-// â”€â”€â”€ Now Playing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Now Playing ──────────────────────────────â”€â”€
 function updateNowPlaying(np) {
   nowPlayingData = np;
   const title       = $('npTitle');
@@ -273,7 +326,7 @@ function updateNowPlaying(np) {
   }
   refreshButtonStates();
 }
-// â”€â”€â”€ Recently Played â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Recently Played ───────────────────────────â”€â”€
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 function isMp3Track(track) {
   const url = String((track && track.url) || '').toLowerCase();
@@ -334,7 +387,7 @@ function renderRecentlyPlayed() {
           </div>
         </div>
         <span class="recent-time-badge">${timeAgo(track.timestamp)}</span>
-        <div class="recent-inf✓>
+        <div class="recent-info">
           <div class="recent-title">${esc(track.title)}</div>
         </div>
       </div>
@@ -362,7 +415,7 @@ function renderRecentlyPlayed() {
     });
   });
 }
-// â”€â”€â”€ Favorites (stored locally for this dashboard) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Favorites (stored locally for this dashboard) ────────────────────────
 let favorites = JSON.parse(localStorage.getItem('dlm_favorites') || '[]');
 function isFavorite(track) {
   return !!track && favorites.some(f => f.url && f.url === track.url);
@@ -377,8 +430,8 @@ function renderFavorites() {
   container.innerHTML = favorites.map((track, i) => `
     <div class="recent-card" data-index="${i}">
       <button class="remove-recent-btn fav-remove" data-index="${i}" title="Remove from favorites">&times;</button>
-      <div class="recent-art">${track.thumbnail ? `<img src="${esc(track.thumbnail)}" alt="" />` : ''}<div class="recent-play-hover">â–¶</div></div>
-      <div class="recent-inf✓><div class="recent-title">${esc(track.title || 'Unknown')}</div></div>
+      <div class="recent-art">${track.thumbnail ? `<img src="${esc(track.thumbnail)}" alt="" />` : ''}<div class="recent-play-hover">▶️</div></div>
+      <div class="recent-info"><div class="recent-title">${esc(track.title || 'Unknown')}</div></div>
     </div>`).join('');
   container.querySelectorAll('.recent-card').forEach(card => card.addEventListener('click', (e) => {
     if (e.target.closest('.fav-remove')) {
@@ -435,7 +488,7 @@ function refreshButtonStates() {
   $('clearQueueBtn').disabled = !hasGuild;
   $('quickAddBtn').disabled  = !hasGuild;
 }
-// â”€â”€â”€ Queue Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Queue Render ──────────────────────────────â”€â”€
 function renderQueue() {
   const list  = $('queueList');
   const count = $('queueCount');
@@ -451,14 +504,14 @@ function renderQueue() {
   } else {
   list.innerHTML = queueData.map((track, i) => `
     <div class="queue-item" data-index="${i}" draggable="true">
-      <span class="queue-drag-handle" title="Drag to reorder">â˜°</span>
+      <span class="queue-drag-handle" title="Drag to reorder">☰</span>
       <span class="queue-index">${i + 1}</span>
       <div class="queue-thumb">
         ${track.thumbnail
           ? `<img src="${esc(track.thumbnail)}" alt="" loading="lazy" />`
           : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`}
       </div>
-      <div class="queue-inf✓>
+      <div class="queue-info">
         <div class="queue-title">${esc(track.title || 'Unknown')}</div>
         <div class="queue-duration">${esc(track.duration || '')}</div>
       </div>
@@ -517,7 +570,7 @@ function renderQueue() {
               ? `<img src="${esc(track.thumbnail)}" alt="" loading="lazy" />`
               : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`}
           </div>
-          <div class="queue-inf❌small">
+          <div class="queue-info-small">
             <div class="queue-title-small">${esc(track.title || 'Unknown')}</div>
             <div class="queue-duration-small">${esc(track.duration || '')}</div>
           </div>
@@ -539,7 +592,7 @@ function renderQueue() {
     if (viewAll) viewAll.style.display = queueData.length > 5 ? 'block' : 'none';
   }
 }
-// â”€â”€â”€ Controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Controls ─────────────────────────────────â”€â”€
 async function handlePlayPause() {
   if (!selectedGuildId || !nowPlayingData) return;
   $('btnPlayPause').disabled = true;
@@ -559,7 +612,7 @@ async function handlePlayPause() {
     } else {
       iPlay.style.display = 'none'; iPause.style.display = '';
       viz.classList.add('active'); art.classList.add('playing');
-      showToast('Playing â–¶', 'info');
+      showToast('Playing ▶️', 'info');
     }
     
     // Optimistic update for bottom bar
@@ -626,8 +679,8 @@ async function handleClearQueue() {
 async function handleShuffle() {
   if (!selectedGuildId) return;
   try {
-    const data = await apiFetch(`/api/queue/shuffle-guildId=${selectedGuildId}`, { method: 'POST' });
-    showToast(`Shuffled ${data.count || 0} songs ðŸ”€`, 'success');
+    const data = await apiFetch(`/api/queue/shuffle?guildId=${selectedGuildId}`, { method: 'POST' });
+    showToast(`Shuffled ${data.count || 0} songs 🔀`, 'success');
     setTimeout(() => { pollNowPlaying(); pollQueue(); }, 500);
   } catch (err) {
     showToast('Shuffle failed: ' + err.message, 'error');
@@ -665,21 +718,21 @@ async function addSong(queryOrUrl, statusEl, inputEl, btnEl) {
     if (inputEl)  inputEl.value = '';
     if (statusEl) {
       statusEl.className   = 'add-status success';
-      statusEl.textContent = 'âœ“ Added to queue!';
+      statusEl.textContent = '✅ Added to queue!';
       setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'add-status'; }, 3000);
     }
-    showToast('Added to queue ðŸŽµ', 'success');
+    showToast('Added to queue 🎵', 'success');
     setTimeout(pollQueue, 800);
     return true;
   } catch (err) {
-    if (statusEl) { statusEl.className = 'add-status error'; statusEl.textContent = 'âœ— ' + err.message; }
+    if (statusEl) { statusEl.className = 'add-status error'; statusEl.textContent = '❌ ' + err.message; }
     showToast('Add failed: ' + err.message, 'error');
     return false;
   } finally {
     if (btnEl) btnEl.disabled = !selectedGuildId;
   }
 }
-// â”€â”€â”€ YouTube Search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── YouTube Search ──────────────────────────────
   function triggerTadcEasterEgg() {
     // We create a custom toast so we can easily inject Kinger inside it
     const container = $('toastContainer');
@@ -689,7 +742,7 @@ async function addSong(queryOrUrl, statusEl, inputEl, btnEl) {
     toast.className = 'toast success';
     toast.style.position = 'relative'; 
     toast.style.overflow = 'visible'; 
-    toast.innerHTML = `<span class="toast-dot"></span><span style="z-index: 2; position: relative;">Watch TADC anywhere! Visit: <a href="https://wackytadc.github.i✓ target="_blank" style="color: var(--accent-1); text-decoration: underline; font-weight: bold;">wackytadc.github.io</a></span>`;
+    toast.innerHTML = `<span class="toast-dot"></span><span style="z-index: 2; position: relative;">Watch TADC anywhere! Visit: <a href="https://wackytadc.github.i✅ target="_blank" style="color: var(--accent-1); text-decoration: underline; font-weight: bold;">wackytadc.github.io</a></span>`;
     
     container.appendChild(toast);
     
@@ -728,12 +781,12 @@ async function doSearch(query, pure = false) {
   selectedSearchResult      = null;
   try {
     const results = await apiFetch(
-      `/api/search-q=${encodeURIComponent(query)}&guildId=${selectedGuildId || ''}&pure=${pure}`
+      `/api/search?q=${encodeURIComponent(query)}&guildId=${selectedGuildId || ''}&pure=${pure}`
     );
     spinner.classList.remove('spinning');
     if (!results || results.length === 0) {
       resultsEl.style.display = 'block';
-      resultsEl.innerHTML     = `<div class="search-n❌results">No results found for "${esc(query)}"</div>`;
+      resultsEl.innerHTML     = `<div class="search-no-results">No results found for "${esc(query)}"</div>`;
       return;
     }
     
@@ -764,7 +817,7 @@ async function doSearch(query, pure = false) {
             ? `<img src="${esc(r.thumbnail)}" alt="" loading="lazy" />`
             : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`}
         </div>
-        <div class="sr-inf✓>
+        <div class="sr-info">
           <div class="sr-title">${esc(r.title)}</div>
           <div class="sr-duration">${esc(r.duration)}</div>
         </div>
@@ -819,14 +872,14 @@ async function doSearch(query, pure = false) {
 
     // Wire up result items
     resultsEl.querySelectorAll('.search-result-item').forEach(item => {
-      // Click row â†’ select it
+      // Click row → select it
       item.addEventListener('click', e => {
         if (e.target.closest('.sr-add-btn')) return; // handled below
         resultsEl.querySelectorAll('.search-result-item').forEach(i => i.classList.remove('selected'));
         item.classList.add('selected');
         selectedSearchResult = { url: item.dataset.url, title: item.dataset.title };
       });
-      // Click + button â†’ add directly
+      // Click + button → add directly
       item.querySelector('.sr-add-btn').addEventListener('click', async e => {
         e.stopPropagation();
         const btn = e.currentTarget;
@@ -846,10 +899,10 @@ async function doSearch(query, pure = false) {
   } catch (err) {
     spinner.classList.remove('spinning');
     resultsEl.style.display = 'block';
-    resultsEl.innerHTML     = `<div class="search-n❌results">Search failed: ${esc(err.message)}</div>`;
+    resultsEl.innerHTML     = `<div class="search-no-results">Search failed: ${esc(err.message)}</div>`;
   }
 }
-// â”€â”€â”€ PIN Lock â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── PIN Lock ─────────────────────────────────â”€â”€
 const ROBOT_MS       = 80;   // keystroke gap below this = suspicious
 let pinUnlocked     = false;   // stays true until page reload
 let pinBuf          = '';      // current digits entered
@@ -964,12 +1017,11 @@ async function checkPin() {
     }
   
     try {
-      const res = await fetch(API_BASE_URL + '/api/verify-pin', {
+      const data = await apiFetch('/api/verify-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'general', pin: pinBuf })
       });
-      const data = await res.json();
       
       if (data.success) {
         // Correct!
@@ -977,7 +1029,7 @@ async function checkPin() {
         closePinOverlay();
         pinAttempts = 0;
         setView('settings');
-        showToast('Settings unlocked ðŸ”“', 'success');
+        showToast('Settings unlocked 🔓', 'success');
       } else {
         // Wrong
         pinAttempts++;
@@ -1047,7 +1099,7 @@ function setView(name) {
       }
     }
 }
-// â”€â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Toast ────────────────────────────────────â”€â”€
 function showToast(message, type = 'info') {
   const container = $('toastContainer');
   const toast = document.createElement('div');
@@ -1059,7 +1111,7 @@ function showToast(message, type = 'info') {
     toast.addEventListener('animationend', () => toast.remove(), { once: true });
   }, 3500);
 }
-// â”€â”€â”€ Utils â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Utils ────────────────────────────────────â”€â”€
 function esc(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1568,7 +1620,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const savedToken = token;
       fetch(API_BASE_URL.replace(/\/$/, '') + '/api/user/data', {
         headers: { 'Authorization': 'Bearer ' + savedToken }
-      }).then(r => r.json()).then(data => {
+      }).then(data => {
         if (data && data.error === 'Banned') {
            const banOverlay = $('banOverlay');
            if (banOverlay) {
@@ -1716,14 +1768,13 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Validate PIN client-side using Base64 before hitting the server
+      // Validate PIN via direct API call
       try {
-        const res = await fetch(API_BASE_URL + '/api/verify-pin', {
+        const data = await apiFetch('/api/verify-pin', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type: 'exec', pin: pin })
         });
-        const data = await res.json();
         if (!data.success) {
             showToast('Invalid Executive PIN.', 'error');
             return;
@@ -1839,12 +1890,11 @@ document.addEventListener('DOMContentLoaded', () => {
               const execOverride = prompt(`Settings are BANNED for ${mins} more minute(s).\n\nEnter Executive PIN to unlock immediately:`);
               if (execOverride) {
                 try {
-                  const res = await fetch(API_BASE_URL + '/api/verify-pin', {
+                  const data = await apiFetch('/api/verify-pin', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ type: 'exec', pin: execOverride })
                   });
-                  const data = await res.json();
                   if (data.success) {
                     localStorage.removeItem('dlm_exec_ban_until');
                     pinUnlocked = true;
@@ -1886,12 +1936,11 @@ document.addEventListener('DOMContentLoaded', () => {
   $('mgmtSubmit').addEventListener('click', async () => {
     const val = $('mgmtInput').value.trim();
     try {
-      const res = await fetch(API_BASE_URL + '/api/verify-pin', {
+      const data = await apiFetch('/api/verify-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'mgmt', pin: val })
       });
-      const data = await res.json();
       if (data.success) {
         pinAttempts = 0; pinBuf = ''; pinKeytimes = [];
         showPinState('pin');
@@ -1911,12 +1960,11 @@ document.addEventListener('DOMContentLoaded', () => {
   $('puzzleSubmit').addEventListener('click', async () => {
     const val = $('puzzleInput').value.trim().toUpperCase();
     try {
-      const res = await fetch(API_BASE_URL + '/api/verify-pin', {
+      const data = await apiFetch('/api/verify-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'puzzle', pin: val })
       });
-      const data = await res.json();
       if (data.success) {
         pinAttempts = 0; pinBuf = ''; pinKeytimes = [];
         showPinState('pin');
@@ -1963,7 +2011,7 @@ document.addEventListener('DOMContentLoaded', () => {
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
           body: JSON.stringify({ guildId: selectedGuildId, positionMs })
         });
-        const data = await response.json();
+        
         nowPlayingData.position = positionMs / 1000;
         updateNowPlaying(nowPlayingData);
         if (data.error) {
@@ -2551,7 +2599,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const val = e.target.value;
       if (!selectedGuildId) return;
       try {
-        await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/speed-guildId=${selectedGuildId}&val=${val}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
+        await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/speed?guildId=${selectedGuildId}&val=${val}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
       } catch (err) { console.error(err); }
     });
   }
@@ -2566,7 +2614,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const val = e.target.value;
       if (!selectedGuildId) return;
       try {
-        await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/pitch-guildId=${selectedGuildId}&val=${val}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
+        await fetch(`${API_BASE_URL.replace(/\/$/, '')}/api/pitch?guildId=${selectedGuildId}&val=${val}`, { headers: { 'ngrok-skip-browser-warning': 'true' }});
       } catch (err) { console.error(err); }
     });
   }
@@ -2672,24 +2720,77 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!file) return;
       if (!selectedGuildId) { showToast('Select a server first!', 'error'); mp3Input.value = ''; return; }
       const statusEl = $('mp3UploadStatus');
-      statusEl.textContent = `â³ Uploading ${file.name}...`;
+      statusEl.textContent = `⏳ Uploading ${file.name}...`;
       statusEl.className = 'mp3-upload-status info';
       try {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('guildId', selectedGuildId);
-        const url = API_BASE_URL.replace(/\/$/, '') + '/api/upload-mp3';
-        const res = await fetch(url, { method: 'POST', body: formData, headers: { 'ngrok-skip-browser-warning': 'true' } });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || `HTTP ${res.status}`);
-        }
-        statusEl.textContent = `âœ“ ${file.name} added to queue!`;
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            const base64Audio = ev.target.result.split(',')[1];
+            statusEl.textContent = '⏳ Uploading to Google Drive... (This may take a minute for large files)';
+            statusEl.className = 'mp3-upload-status';
+            
+            try {
+                // 1. Upload to your OWN backend (Fixes CORS and Java blocking issues permanently)
+                const uploadRes = await new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    
+                    xhr.open('POST', 'https://dlm-bluesteel.onrender.com/api/upload?name=' + encodeURIComponent(file.name), true);
+    
+                    // Send the raw file buffer
+                    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+                    
+                    xhr.upload.onprogress = function(e) {
+                        if (e.lengthComputable) {
+                            const percent = Math.round((e.loaded / e.total) * 100);
+                            statusEl.textContent = '⏳ Uploading audio... (' + percent + '%)';
+                        }
+                    };
+                    
+                    xhr.onload = function() {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try { resolve(JSON.parse(xhr.responseText)); } catch(e) { reject(new Error('Invalid JSON from server')); }
+                        } else { reject(new Error('Upload failed with status: ' + xhr.status)); }
+                    };
+                    
+                    xhr.onerror = function() { reject(new Error('Network error while uploading. (Did you deploy the updated server.js?)')); };
+                    xhr.send(file);
+                });
+                
+                if (!uploadRes || !uploadRes.url) {
+                    throw new Error('Server upload failed.');
+                }
+                
+                const directUrl = uploadRes.url;
+                
+                // 2. Add the resulting Direct URL to the queue
+                statusEl.textContent = '⏳ Adding to Queue...';
+                
+                const data = await apiFetch('/api/queue/add', {
+                    method: 'POST',
+                    body: JSON.stringify({ guildId: selectedGuildId, query: directUrl })
+                });
+                
+                if (data && (data.status === 'added' || data.success)) {
+                    statusEl.textContent = `✅ ${file.name} added to queue!`;
+                    statusEl.className = 'mp3-upload-status success';
+                    setTimeout(() => { statusEl.textContent = ''; }, 4000);
+                    setTimeout(pollQueue, 800);
+                } else {
+                    throw new Error(data.error || 'Unknown error from bot');
+                }
+            } catch (err) {
+                statusEl.textContent = `❌ Upload failed: ${err.message}`;
+                statusEl.className = 'mp3-upload-status error';
+            }
+            mp3Input.value = '';
+        };
+        reader.readAsDataURL(file);
+        statusEl.textContent = `✅ ${file.name} added to queue!`;
         statusEl.className = 'mp3-upload-status success';
         setTimeout(() => { statusEl.textContent = ''; }, 4000);
         setTimeout(pollQueue, 800);
       } catch (err) {
-        statusEl.textContent = `âœ— Upload failed: ${err.message}`;
+        statusEl.textContent = `❌ Upload failed: ${err.message}`;
         statusEl.className = 'mp3-upload-status error';
       }
       mp3Input.value = '';
@@ -2710,7 +2811,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!url) { showToast('Enter a URL first', 'error'); return; }
     API_BASE_URL = url;
     localStorage.setItem('dlm_api_url', url);
-    showToast('Saved âœ“', 'success');
+    showToast('Saved ✅', 'success');
     stopPolling(); nowPlayingData = null; selectedGuildId = null;
     loadGuilds();
   });
@@ -2766,12 +2867,11 @@ document.addEventListener('DOMContentLoaded', () => {
           const execOverride = prompt(`Settings are BANNED for ${mins} more minute(s).\n\nEnter Executive PIN to unlock immediately:`);
           if (execOverride) {
             try {
-              const res = await fetch(API_BASE_URL + '/api/verify-pin', {
+              const data = await apiFetch('/api/verify-pin', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ type: 'exec', pin: execOverride })
               });
-              const data = await res.json();
               if (data.success) {
                 localStorage.removeItem(EXEC_BAN_KEY);
                 execPinAttempts = 0;
@@ -2789,12 +2889,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!pin) return;
         
         try {
-          const res = await fetch(API_BASE_URL + '/api/verify-pin', {
+          const data = await apiFetch('/api/verify-pin', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type: 'exec', pin: pin })
           });
-          const data = await res.json();
           if (data.success) {
             execPinAttempts = 0;
             const url = prompt('EXECUTIVE ACCESS GRANTED ðŸ›¡ï¸\n\nEnter the new Global Bot API URL for all users:', API_BASE_URL);
@@ -2839,10 +2938,10 @@ document.addEventListener('DOMContentLoaded', () => {
     result.className = 'test-result'; result.textContent = 'Testing...';
     try {
       const res = await fetch(url.replace(/\/$/, '') + '/api/health', { headers: { 'ngrok-skip-browser-warning': 'true' } });
-      if (res.ok) { result.className = 'test-result success'; result.textContent = 'âœ“ Connection successful!'; }
+      if (res.ok) { result.className = 'test-result success'; result.textContent = '✅ Connection successful!'; }
       else throw new Error(`HTTP ${res.status}`);
     } catch (err) {
-      result.className = 'test-result error'; result.textContent = `âœ— Failed — ${err.message}`;
+      result.className = 'test-result error'; result.textContent = `❌ Failed — ${err.message}`;
     }
   });
   // Clear Recently Played History button (Inside Settings, not PIN-protected)
@@ -3166,7 +3265,7 @@ if (statusDotEl) {
     const username = localStorage.getItem('dlm_username');
     if (!token || !username) return;
 
-    fetch(API_BASE_URL + '/api/user/wallpaper-settings-user=' + encodeURIComponent(username))
+    fetch(API_BASE_URL + '/api/user/wallpaper-settings?user=' + encodeURIComponent(username))
       .then(res => res.json())
       .then(data => {
         if (!data.error) {
@@ -3194,4 +3293,3 @@ if (statusDotEl) {
         });
       }).catch(() => {});
   }
-

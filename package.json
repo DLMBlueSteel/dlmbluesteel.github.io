@@ -1,0 +1,22 @@
+{
+  "name": "real-website-frfr",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "postinstall": "pip install shazamio || pip3 install shazamio"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "firebase-admin": "^14.2.0",
+    "music-metadata": "^11.14.0",
+    "node-id3": "^0.2.9"
+  }
+}
